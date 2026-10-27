@@ -212,6 +212,19 @@ with st.sidebar:
             else:
                 st.error(msg)
 
+    st.markdown("---")
+    st.markdown("### 📘 System Architecture")
+    arch_file = Path(__file__).parent / "ARCHITECTURE.md"
+    if arch_file.exists():
+        with open(arch_file, "r", encoding="utf-8") as af:
+            st.download_button(
+                "⬇️ Download System Architecture (.md)",
+                data=af.read(),
+                file_name="ARCHITECTURE.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+
 
 # -------------------------------------------------------------
 # MAIN SCREEN: UNIFIED CLEAN WORKSPACE
