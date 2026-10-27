@@ -82,62 +82,35 @@ The application will open in your browser at `http://localhost:8501`.
 
 ---
 
-## 5. User Interface Walkthrough
+## 5. Clean, Unified User Interface
 
-The application features 6 specialized tabs:
+The application has been overhauled into a **single, zero-confusion workspace**:
 
-1. **📁 1. Upload & Quick Clean**
-   - Drag and drop `.xlsx`, `.xls`, and `.csv` files in the same batch.
-   - For Excel: detects and displays sheet names; select individual worksheets.
-   - For CSV: automatically detects encoding (UTF-8, Latin1, CP1252) and delimiters (comma, semicolon, tab, pipe) with manual override options.
-   - **Master Mode Toggle**: Choose between creating a fresh master workbook from the uploaded batch or merging with the existing master on disk.
-   - **⚡ 1-Click Auto-Consolidate**: Instantly consolidates all uploaded records (e.g., 1,368 rows), runs safe duplicate detection, and generates direct download buttons right on the upload page with zero row loss.
-   - Displays row counts, column counts, warnings, and table previews.
+1. **📁 1. Upload Spreadsheets**
+   - Drag and drop `.xlsx`, `.xls`, and `.csv` files into one unified drop zone.
+   - Live badges display file names, detected worksheets, and total incoming rows.
+   - Simple Master Mode selector:
+     - 🔘 *Create New Master from this upload* (Clean slate; recommended)
+     - 🔘 *Merge with existing Master.xlsx on disk*
 
-2. **🔀 2. Schema Alignment**
-   - Automatically maps equivalent column names using semantic synonym groups (e.g. `Company Name` ↔ `Business Name`, `Phone` ↔ `Contact Number`, `Email` ↔ `Email Address`).
-   - Flags ambiguous column candidates for user confirmation.
-   - Preserves unique/unmapped columns separately.
-   - Displays real-time preview of consolidated staging data.
+2. **⚙️ Optional Settings (Collapsed by default)**
+   - *Column Schema Alignment*: View or adjust automatic semantic synonym mappings if desired.
+   - *Duplicate Detection Rules*: Defaults to `Entire Row` (safest; zero data loss). Optional toggles for selected columns and fuzzy matching.
 
-3. **🔍 3. Duplicate Review**
-   - **Exact Matching**: Compare by entire row, selected fields (e.g., Email or Phone), or common shared columns.
-   - **Probable Matching**: Optional RapidFuzz similarity matching with a configurable threshold (60% - 98%).
-   - **Blank Safeguard**: Blank cells matching blank cells **never** trigger duplicate matches.
-   - **Side-by-Side Review**: Inspect matching fields, differing fields, and confidence scores.
-   - **Resolution Actions**:
-     - *Keep First Occurrence*
-     - *Keep Last Occurrence*
-     - *Keep Most Populated Row*
-     - *Merge Complementary Information* (fills missing fields across rows)
-     - *Keep Both Records* (mark not duplicate)
-     - *Manually Select Preferred Row*
+3. **🚀 1-Click Processing & Reconciliation**
+   - Click **`⚡ Consolidate & Clean All Data Now`** to immediately align schemas, verify unique records, and generate the cleaned master.
+   - Three clean summary cards: **Input Rows Read**, **Duplicates Removed**, and **Cleaned Master Rows**.
+   - If duplicates are found, an expandable review section lets you inspect matching rows and resolution actions.
+   - Interactive preview table showing the final cleaned records.
 
-4. **⚡ 4. Clean & Update**
-   - Displays clear before-and-after row count reconciliation:
-     - Original Master Rows
-     - Incoming Rows
-     - Duplicates Removed
-     - Unique Records Added
-     - Final Master Row Count
-   - **Option A (Update Master.xlsx)**: Creates a timestamped backup in `backups/` and performs an atomic write to `data/Master.xlsx`.
-   - **Option B (Download Only)**: Prepares the cleaned data without altering local storage.
+4. **💾 Instant Downloads & Save**
+   - **`⬇️ Download Master Excel`**: Formatted `.xlsx` with all 5 required worksheets (`Cleaned_Master`, `Duplicate_Report`, `Processing_Summary`, `Review_Required`, `Source_Trace`).
+   - **`⬇️ Download Master CSV`**: UTF-8 flat table.
+   - **`💾 Save as Disk Master.xlsx`**: Commits the dataset to disk with automatic timestamped backup.
 
-5. **💾 5. Export Reports**
-   - **Excel Workbook (`.xlsx`)**: Includes all 5 required worksheets:
-     - `Cleaned_Master` (Consolidated clean data, frozen headers, autofilters, cell formatting)
-     - `Duplicate_Report` (Audit log of all duplicate groups and actions taken)
-     - `Processing_Summary` (Metrics and reconciliation table)
-     - `Review_Required` (Uncertain matches, probable duplicates, and conflicts)
-     - `Source_Trace` (Maps each master row back to original file, sheet, and row)
-   - **CSV Export (`.csv`)**: Cleaned master dataset with configurable delimiter and UTF-8 encoding.
-   - **Formula Injection Safeguard**: Values starting with `=`, `+`, `-`, or `@` are safely escaped.
-
-6. **⚙️ 6. Master Management**
-   - View current master metadata (row count, columns, file size, last modified).
-   - Upload an existing `Master.xlsx` when migrating between machines.
-   - One-click restore from any timestamped backup in `backups/`.
-   - Reset master with explicit confirmation.
+5. **⚙️ Sidebar: Master File & Backup Recovery**
+   - Keeps administrative tools accessible yet completely out of the way of your workflow.
+   - View current `Master.xlsx` status on disk, download it, upload custom masters, restore from backups, or reset.
 
 ---
 
