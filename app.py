@@ -128,7 +128,9 @@ def init_session_state():
     if "processing_done" not in st.session_state:
         st.session_state.processing_done = False
     if "master_mode" not in st.session_state:
-        st.session_state.master_mode = "fresh"
+        st.session_state.master_mode = "merge" if get_manager().exists() else "fresh"
+    if "last_upload_signature" not in st.session_state:
+        st.session_state.last_upload_signature = ""
 
 
 init_session_state()
@@ -250,39 +252,53 @@ if uploaded_files:
     for up_file in uploaded_files:
         fname = up_file.name
         lower_name = fname.lower()
+        f_bytes = up_file.getvalue()
+        f_hash = compute_content_hash(f_bytes)
 
         if lower_name.endswith(".xlsx") or lower_name.endswith(".xls"):
             try:
-                sheet_names = inspect_excel_sheets(up_file)
-                default_sheets = st.session_state.sheet_selections.get(fname, sheet_names)
-                # If multiple sheets exist, let user select
+                sheet_stream = io.BytesIO(f_bytes)
+                sheet_names = inspect_excel_sheets(sheet_stream)
+
+                # Use content hash in widget key to dynamically adapt to sheet changes
+                widget_key = f"u_sheets_{fname}_{f_hash[:8]}"
                 if len(sheet_names) > 1:
                     selected_sheets = st.multiselect(
                         f"Worksheets to include from '{fname}':",
                         options=sheet_names,
-                        default=[s for s in default_sheets if s in sheet_names] or sheet_names,
-                        key=f"u_sheets_{fname}",
+                        default=sheet_names,
+                        key=widget_key,
                     )
                 else:
                     selected_sheets = sheet_names
 
                 st.session_state.sheet_selections[fname] = selected_sheets
                 for s_name in selected_sheets:
-                    ds = read_excel_dataset(up_file, filename=fname, sheet_name=s_name)
+                    s_stream = io.BytesIO(f_bytes)
+                    ds = read_excel_dataset(s_stream, filename=fname, sheet_name=s_name)
                     all_loaded.append(ds)
             except Exception as ex:
                 st.error(f"Error loading {fname}: {str(ex)}")
 
         elif lower_name.endswith(".csv"):
             try:
-                det_enc, det_delim, _ = detect_csv_properties(up_file)
-                ds = read_csv_dataset(up_file, filename=fname, encoding=det_enc, delimiter=det_delim)
+                c_stream = io.BytesIO(f_bytes)
+                det_enc, det_delim, _ = detect_csv_properties(c_stream)
+                c_stream.seek(0)
+                ds = read_csv_dataset(c_stream, filename=fname, encoding=det_enc, delimiter=det_delim)
                 all_loaded.append(ds)
             except Exception as ex:
                 st.error(f"Error loading {fname}: {str(ex)}")
 
     st.session_state.loaded_datasets = all_loaded
     total_incoming_rows = sum(d.row_count for d in all_loaded)
+
+    # Invalidate stale processing state if uploaded files or sheet selections changed
+    upload_sig = "|".join(f"{d.source_filename}::{d.sheet_name}::{d.content_hash}" for d in all_loaded)
+    if st.session_state.get("last_upload_signature") != upload_sig:
+        st.session_state.last_upload_signature = upload_sig
+        st.session_state.workflow = ConsolidationWorkflow(get_manager())
+        st.session_state.processing_done = False
 
     # Display files summary badge
     file_badges = " &nbsp;|&nbsp; ".join([f"**{d.source_filename}** ({d.row_count:,} rows)" for d in all_loaded])
@@ -291,14 +307,15 @@ if uploaded_files:
     # Master Mode Selection
     col_m1, col_m2 = st.columns([1, 1])
     with col_m1:
+        default_idx = 1 if master_summary["exists"] and master_summary["row_count"] > 0 else 0
         master_mode = st.radio(
             "Target Master Action:",
             options=["fresh", "merge"],
             format_func=lambda x: {
-                "fresh": "Create New Master from this upload (Clean slate; recommended)",
+                "fresh": "Create New Master from this upload (Clean slate)",
                 "merge": f"Merge with existing Master.xlsx on disk ({master_summary['row_count']} existing rows)",
             }[x],
-            index=0 if not master_summary["exists"] or master_summary["row_count"] <= 11 else 1,
+            index=default_idx,
             key="clean_master_mode_radio",
         )
         st.session_state.master_mode = master_mode
@@ -343,14 +360,20 @@ if uploaded_files:
 
     # Step 3: Action Button
     st.markdown("---")
-    if st.button(f"⚡ Consolidate & Clean All Data Now ({total_incoming_rows:,} rows)", type="primary", use_container_width=True):
+    c_mode = st.session_state.get("clean_comp_mode", "entire_row")
+    user_clicked_consolidate = st.button(
+        f"⚡ Consolidate & Clean All Data Now ({total_incoming_rows:,} rows)",
+        type="primary",
+        use_container_width=True,
+    )
+
+    wf: ConsolidationWorkflow = st.session_state.workflow
+
+    if user_clicked_consolidate or (not st.session_state.processing_done and all_loaded):
         with st.spinner("Consolidating datasets, aligning schemas, and verifying records..."):
-            wf: ConsolidationWorkflow = st.session_state.workflow
             wf.set_datasets(all_loaded)
             include_m = (master_mode == "merge" and manager.exists())
             wf.build_consolidated_staging(include_existing_master=include_m)
-
-            c_mode = st.session_state.get("clean_comp_mode", "entire_row")
             wf.detect_duplicates(
                 comparison_mode=c_mode,
                 selected_columns=selected_cols if c_mode == "selected_columns" else None,
@@ -362,30 +385,24 @@ if uploaded_files:
             st.session_state.processing_done = True
 
     # Step 4: Results & Downloads
-    wf: ConsolidationWorkflow = st.session_state.workflow
-
-    # Auto-consolidate if user hasn't pressed button yet so downloads are always ready
-    if wf.cleaned_df.empty and all_loaded:
-        wf.set_datasets(all_loaded)
-        include_m = (master_mode == "merge" and manager.exists())
-        wf.build_consolidated_staging(include_existing_master=include_m)
-        wf.detect_duplicates(comparison_mode="entire_row")
-        wf.apply_resolutions()
-        st.session_state.processing_done = True
-
     if not wf.cleaned_df.empty:
+        summary = wf.processing_summary
+        new_unique_count = summary.get("new_unique_records_added", 0)
+        dups_removed_count = summary.get("confirmed_duplicates_removed", 0)
+        existing_matched_count = summary.get("existing_records_matched", 0)
+
         st.markdown(
             f"""
             <div class="banner-success">
-                <span style="font-size: 1.15rem; font-weight: 700; color: #15803D;">✅ Cleaned Master Ready: {len(wf.cleaned_df):,} records</span><br/>
-                <span style="color: #4B5563;">All records consolidated and verified. Ready to download or save to disk.</span>
+                <span style="font-size: 1.15rem; font-weight: 700; color: #15803D;">✅ Cleaned Master Ready: {len(wf.cleaned_df):,} total records</span><br/>
+                <span style="color: #4B5563;">Processed {len(all_loaded)} worksheet(s). <b>{new_unique_count:,}</b> new unique records added, <b>{existing_matched_count:,}</b> existing records matched, <b>{dups_removed_count:,}</b> duplicates removed.</span>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        # 3 Clean Metric Cards
-        col_res1, col_res2, col_res3 = st.columns(3)
+        # 4 Clean Metric Cards
+        col_res1, col_res2, col_res3, col_res4 = st.columns(4)
         with col_res1:
             st.markdown(
                 f'<div class="metric-card"><div class="metric-value">{total_incoming_rows:,}</div><div class="metric-label">Input Rows Read</div></div>',
@@ -393,17 +410,22 @@ if uploaded_files:
             )
         with col_res2:
             st.markdown(
-                f'<div class="metric-card"><div class="metric-value" style="color: #DC2626;">-{wf.processing_summary.get("confirmed_duplicates_removed", 0):,}</div><div class="metric-label">Duplicates Removed</div></div>',
+                f'<div class="metric-card"><div class="metric-value" style="color: #2563EB;">+{new_unique_count:,}</div><div class="metric-label">New Unique Records</div></div>',
                 unsafe_allow_html=True,
             )
         with col_res3:
+            st.markdown(
+                f'<div class="metric-card"><div class="metric-value" style="color: #DC2626;">-{dups_removed_count:,}</div><div class="metric-label">Duplicates Removed</div></div>',
+                unsafe_allow_html=True,
+            )
+        with col_res4:
             st.markdown(
                 f'<div class="metric-card"><div class="metric-value" style="color: #16A34A;">{len(wf.cleaned_df):,}</div><div class="metric-label">Cleaned Master Rows</div></div>',
                 unsafe_allow_html=True,
             )
 
         # Large Direct Download Buttons
-        st.markdown("### 2. Download Cleaned Output")
+        st.markdown("### 2. Download Cleaned Output & Update Master")
         dl_col1, dl_col2, dl_col3 = st.columns(3)
         t_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -439,17 +461,31 @@ if uploaded_files:
             if st.button("💾 Save as Disk Master.xlsx", type="secondary", use_container_width=True):
                 ok, msg, b_path = wf.commit_to_master()
                 if ok:
-                    st.success(f"Saved to Master.xlsx on disk! {f'(Backup: {b_path.name})' if b_path else ''}")
+                    st.success(f"Successfully updated Master.xlsx! {f'(Backup: {b_path.name})' if b_path else ''}")
                     st.rerun()
                 else:
-                    st.error(f"Failed to save: {msg}")
+                    st.error(f"Failed to update Master workbook: {msg}")
 
-        # Data Preview Table
-        with st.expander(f"👀 View Cleaned Master Data Preview ({len(wf.cleaned_df):,} rows)", expanded=True):
+        # Newly Added Records Inspection
+        newly_added_df = wf.get_newly_added_records_dataframe()
+        if not newly_added_df.empty:
+            with st.expander(f"✨ Inspect Newly Added Records ({len(newly_added_df):,} records)", expanded=True):
+                st.caption("These records are genuinely new and will be added to the Master database:")
+                st.dataframe(newly_added_df, use_container_width=True)
+
+        # File-Level Ingestion & Contribution Breakdown Table
+        file_rep_df = wf.get_file_report_dataframe()
+        if not file_rep_df.empty:
+            with st.expander("📄 File-Level Ingestion & Contribution Report", expanded=False):
+                st.caption("Breakdown of rows read, contributions to master, and duplicates per uploaded file/sheet:")
+                st.dataframe(file_rep_df, use_container_width=True)
+
+        # Full Cleaned Master Preview
+        with st.expander(f"👀 View Cleaned Master Data Preview ({len(wf.cleaned_df):,} rows)", expanded=False):
             display_cols = [c for c in wf.cleaned_df.columns if c not in PROVENANCE_COLS]
-            st.dataframe(wf.cleaned_df[display_cols].head(25), use_container_width=True)
+            st.dataframe(wf.cleaned_df[display_cols].head(50), use_container_width=True)
 
-        # Duplicate Review (Only shown if duplicate groups were detected)
+        # Duplicate Review
         all_dups = wf.exact_duplicate_groups + wf.probable_duplicate_groups
         if all_dups:
             with st.expander(f"🔍 Review Detected Duplicates ({len(all_dups)} group(s))", expanded=False):
@@ -458,5 +494,15 @@ if uploaded_files:
                     grp_df = wf.staging_df.loc[g.row_indices]
                     st.dataframe(grp_df[[c for c in grp_df.columns if c not in PROVENANCE_COLS]], use_container_width=True)
 
+        # Reconciliation Metrics Table
+        with st.expander("📋 Full Reconciliation Metrics Table", expanded=False):
+            st.table(wf.get_summary_dataframe())
+
 else:
+    # Reset state when no files are uploaded
+    if st.session_state.get("last_upload_signature"):
+        st.session_state.last_upload_signature = ""
+        st.session_state.workflow = ConsolidationWorkflow(get_manager())
+        st.session_state.processing_done = False
     st.info("👆 Drag and drop your Excel or CSV spreadsheets above to begin. Everything is processed and prepared in one click.")
+

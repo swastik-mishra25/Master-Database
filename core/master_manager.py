@@ -1,6 +1,7 @@
 """
 Master workbook persistence, backups, recovery, and updates.
 """
+import os
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -100,12 +101,19 @@ class MasterManager:
         """
         Safely update Master.xlsx using atomic replacement.
         Creates a backup before replacing if one exists.
+        Validates the generated workbook before committing.
         """
+        if df is None or not isinstance(df, pd.DataFrame):
+            return False, "Validation failed: Master dataset must be a valid DataFrame.", None
+
         ensure_directories()
         backup_path = None
 
         if self.exists() and create_backup:
-            backup_path = self.create_backup()
+            try:
+                backup_path = self.create_backup()
+            except Exception as be:
+                return False, f"Failed to create safety backup prior to update: {str(be)}", None
 
         # Temporary file in the same directory for true atomic replacement
         temp_file = self.master_path.parent / f"temp_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.xlsx"
@@ -118,14 +126,32 @@ class MasterManager:
                 extra_sheets=extra_sheets,
             )
 
+            # Verification step: Open temporary workbook and verify structure and content
+            test_wb = openpyxl.load_workbook(temp_file, read_only=True)
+            if "Cleaned_Master" not in test_wb.sheetnames:
+                test_wb.close()
+                temp_file.unlink(missing_ok=True)
+                return False, "Validation error: 'Cleaned_Master' worksheet not found in generated workbook.", backup_path
+
+            test_ws = test_wb["Cleaned_Master"]
+            test_row_count = test_ws.max_row
+            test_wb.close()
+
+            # Ensure expected rows exist (header + data rows)
+            expected_min_rows = 1 if df.empty else len(df) + 1
+            if test_row_count is not None and test_row_count < expected_min_rows:
+                temp_file.unlink(missing_ok=True)
+                return False, f"Validation error: Generated master has {test_row_count} rows, expected at least {expected_min_rows}.", backup_path
+
             # Atomic replace (same directory)
-            if self.master_path.exists():
-                self.master_path.unlink()
-            shutil.move(str(temp_file), str(self.master_path))
+            os.replace(str(temp_file), str(self.master_path))
             return True, "Master workbook saved successfully.", backup_path
         except Exception as e:
             if temp_file.exists():
                 temp_file.unlink(missing_ok=True)
+            # If master was somehow damaged and backup exists, recover
+            if not self.exists() and backup_path and backup_path.exists():
+                shutil.copy2(backup_path, self.master_path)
             return False, f"Failed to save Master workbook: {str(e)}", backup_path
 
     def restore_backup(self, backup_filename: str) -> Tuple[bool, str]:

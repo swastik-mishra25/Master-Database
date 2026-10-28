@@ -9,7 +9,7 @@ from dateutil import parser as date_parser
 from .config import DEFAULT_BLANK_PLACEHOLDERS
 
 # Provenance column names
-PROVENANCE_COLS = ["_source_file", "_source_sheet", "_source_row", "_import_id"]
+PROVENANCE_COLS = ["_source_file", "_source_sheet", "_source_row", "_import_id", "_is_master"]
 
 
 def is_blank(val: Any) -> bool:

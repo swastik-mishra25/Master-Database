@@ -98,23 +98,29 @@ class SchemaMapper:
         """
         Establish the initial master column list.
         If existing_master_cols is provided, start with that.
-        Otherwise, use the columns of the first dataset, and append unique columns from subsequent datasets.
+        Otherwise, use the columns of the first dataset, and append genuinely new columns from subsequent datasets.
+        Columns that are synonyms or match existing target columns are NOT added as separate columns.
         """
-        cols_seen: Set[str] = set()
         canonical_cols: List[str] = []
+
+        def _is_represented(col: str, existing_list: List[str]) -> bool:
+            norm_col = normalize_header(col)
+            for c in existing_list:
+                norm_c = normalize_header(c)
+                if norm_col == norm_c or are_synonyms(col, c):
+                    return True
+                if fuzz.token_sort_ratio(norm_col, norm_c) >= 90.0:
+                    return True
+            return False
 
         if existing_master_cols:
             for c in existing_master_cols:
-                norm = normalize_header(c)
-                if norm and norm not in cols_seen:
-                    cols_seen.add(norm)
+                if not _is_represented(c, canonical_cols):
                     canonical_cols.append(c)
 
         for ds in datasets:
             for col in ds.columns:
-                norm = normalize_header(col)
-                if norm and norm not in cols_seen:
-                    cols_seen.add(norm)
+                if not _is_represented(col, canonical_cols):
                     canonical_cols.append(col)
 
         self.target_columns = canonical_cols

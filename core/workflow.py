@@ -73,11 +73,12 @@ class ConsolidationWorkflow:
                 for idx, row in master_df.iterrows():
                     row_dict = {}
                     for c in consolidated_cols:
-                        row_dict[c] = row[c] if c in row else ""
+                        row_dict[c] = "" if is_blank(row.get(c, "")) else str(row[c])
                     row_dict["_source_file"] = row.get("_source_file", "Master.xlsx")
                     row_dict["_source_sheet"] = row.get("_source_sheet", "Master")
                     row_dict["_source_row"] = row.get("_source_row", idx + 1)
-                    row_dict["_import_id"] = row.get("_import_id", "EXISTING_MASTER")
+                    row_dict["_import_id"] = "EXISTING_MASTER"
+                    row_dict["_is_master"] = True
                     rows_list.append(row_dict)
 
         # 2. Incoming datasets
@@ -90,12 +91,13 @@ class ConsolidationWorkflow:
                 for src_c in ds.columns:
                     tgt_c = mapping.get(src_c, src_c)
                     val = row[src_c]
-                    row_dict[tgt_c] = val
+                    row_dict[tgt_c] = "" if is_blank(val) else str(val)
 
                 row_dict["_source_file"] = ds.source_filename
                 row_dict["_source_sheet"] = ds.sheet_name
                 row_dict["_source_row"] = r_idx + 1
                 row_dict["_import_id"] = f"{ds.source_filename}_{import_timestamp}"
+                row_dict["_is_master"] = False
                 rows_list.append(row_dict)
 
         if rows_list:
@@ -170,57 +172,133 @@ class ConsolidationWorkflow:
         return self.cleaned_df, self.review_df
 
     def _compile_summary(self):
-        """Calculate metrics for processing summary."""
+        """Calculate metrics for processing summary according to exact operational results."""
         existing_master_count = 0
         if self.master_manager.exists():
             m = self.master_manager.load_master()
             existing_master_count = len(m) if m is not None else 0
 
         incoming_rows = sum(ds.row_count for ds in self.datasets)
+        valid_evaluated = sum(len(ds.df) for ds in self.datasets if not ds.errors)
         total_staged = len(self.staging_df)
 
-        exact_dups_count = sum(len(g.row_indices) - 1 for g in self.exact_duplicate_groups if g.resolution != "keep_both")
-        probable_dups_count = sum(len(g.row_indices) - 1 for g in self.probable_duplicate_groups if g.resolution != "keep_both")
-        total_removed = exact_dups_count + probable_dups_count
+        # Count confirmed duplicates dropped
+        confirmed_removed = sum(len(a.get("removed_indices", [])) for a in self.audit_records)
+
+        # Count incoming records that matched an existing master record
+        all_groups = self.exact_duplicate_groups + self.probable_duplicate_groups
+        existing_matched = 0
+        records_merged = 0
+
+        for g in all_groups:
+            if g.resolution != "keep_both":
+                master_indices = [i for i in g.row_indices if self.staging_df.at[i, "_import_id"] == "EXISTING_MASTER"]
+                incoming_indices = [i for i in g.row_indices if self.staging_df.at[i, "_import_id"] != "EXISTING_MASTER"]
+                if master_indices and incoming_indices:
+                    existing_matched += len(incoming_indices)
+                if g.resolution == "merge_complementary":
+                    records_merged += 1
 
         final_rows = len(self.cleaned_df)
-        unique_added = max(0, final_rows - existing_master_count)
+
+        # Genuinely new unique records added from incoming uploads
+        if not self.cleaned_df.empty and "_import_id" in self.cleaned_df.columns:
+            new_unique_added = int((self.cleaned_df["_import_id"] != "EXISTING_MASTER").sum())
+        else:
+            new_unique_added = final_rows if not self.master_manager.exists() else 0
+
+        files_selected = len({ds.source_filename for ds in self.datasets})
+        files_processed = len({ds.source_filename for ds in self.datasets if not ds.errors})
+        failures_warnings = len(self.errors) + len(self.warnings)
 
         self.processing_summary = {
+            "files_selected": files_selected,
+            "files_processed": files_processed,
+            "worksheets_processed_count": len(self.datasets),
             "uploaded_files": [ds.source_filename for ds in self.datasets],
             "worksheets_processed": [f"{ds.source_filename} [{ds.sheet_name}]" for ds in self.datasets],
-            "incoming_rows_read": incoming_rows,
+            "input_rows_read": incoming_rows,
+            "valid_records_evaluated": valid_evaluated,
             "existing_master_rows": existing_master_count,
+            "master_rows_before": existing_master_count,
             "total_staged_rows": total_staged,
             "exact_duplicate_groups": len(self.exact_duplicate_groups),
             "probable_duplicate_groups": len(self.probable_duplicate_groups),
-            "confirmed_duplicates_removed": total_removed,
+            "existing_records_matched": existing_matched,
+            "confirmed_duplicates_removed": confirmed_removed,
+            "records_updated_or_merged": records_merged,
             "records_requiring_review": len(self.review_df),
-            "unique_records_added": unique_added,
+            "unique_records_added": new_unique_added,
+            "new_unique_records_added": new_unique_added,
             "final_master_row_count": final_rows,
+            "master_rows_after": final_rows,
             "warnings_count": len(self.warnings),
             "errors_count": len(self.errors),
+            "failures_and_warnings": failures_warnings,
         }
 
     def get_summary_dataframe(self) -> pd.DataFrame:
         """Format processing summary into a clean two-column DataFrame for Excel export."""
         s = self.processing_summary
         metrics = [
-            ("Uploaded Files", ", ".join(s.get("uploaded_files", []))),
-            ("Worksheets Processed", ", ".join(s.get("worksheets_processed", []))),
-            ("Incoming Rows Read", s.get("incoming_rows_read", 0)),
-            ("Existing Master Rows", s.get("existing_master_rows", 0)),
-            ("Total Staged Records", s.get("total_staged_rows", 0)),
-            ("Exact Duplicate Groups Found", s.get("exact_duplicate_groups", 0)),
-            ("Probable Duplicate Groups Found", s.get("probable_duplicate_groups", 0)),
+            ("Files Selected", s.get("files_selected", 0)),
+            ("Files Successfully Processed", s.get("files_processed", 0)),
+            ("Worksheets Processed", s.get("worksheets_processed_count", 0)),
+            ("Input Rows Read", s.get("input_rows_read", 0)),
+            ("Valid Records Evaluated", s.get("valid_records_evaluated", 0)),
+            ("Rows in Master Before Processing", s.get("master_rows_before", 0)),
+            ("Existing Records Matched", s.get("existing_records_matched", 0)),
+            ("New Unique Records Added", s.get("new_unique_records_added", 0)),
             ("Confirmed Duplicates Removed", s.get("confirmed_duplicates_removed", 0)),
-            ("Records Requiring Review", s.get("records_requiring_review", 0)),
-            ("Unique Records Added", s.get("unique_records_added", 0)),
+            ("Records Updated or Merged", s.get("records_updated_or_merged", 0)),
+            ("Potential Duplicates Awaiting Review", s.get("records_requiring_review", 0)),
             ("Final Consolidated Master Row Count", s.get("final_master_row_count", 0)),
-            ("Validation Warnings", len(self.warnings)),
-            ("Validation Errors", len(self.errors)),
+            ("Validation Failures and Warnings", s.get("failures_and_warnings", 0)),
         ]
         return pd.DataFrame(metrics, columns=["Metric", "Value"])
+
+    def get_file_report_dataframe(self) -> pd.DataFrame:
+        """Generate a file-level report of ingestion, rows read, contributions, and status."""
+        rows = []
+        for ds in self.datasets:
+            contributed = 0
+            if not self.cleaned_df.empty and "_source_file" in self.cleaned_df.columns:
+                contributed = int((
+                    (self.cleaned_df["_source_file"] == ds.source_filename) &
+                    (self.cleaned_df["_source_sheet"] == ds.sheet_name)
+                ).sum())
+
+            dups_identified = max(0, ds.row_count - contributed)
+
+            status = "Success"
+            if ds.errors:
+                status = f"Failed: {'; '.join(ds.errors)}"
+            elif ds.warnings:
+                status = f"Warning: {'; '.join(ds.warnings)}"
+
+            rows.append({
+                "Filename": ds.source_filename,
+                "Worksheet": ds.sheet_name,
+                "Rows Read": ds.row_count,
+                "New Records Contributed": contributed,
+                "Duplicates Excluded": dups_identified,
+                "Status": status,
+            })
+
+        return pd.DataFrame(rows) if rows else pd.DataFrame(
+            columns=["Filename", "Worksheet", "Rows Read", "New Records Contributed", "Duplicates Excluded", "Status"]
+        )
+
+    def get_newly_added_records_dataframe(self) -> pd.DataFrame:
+        """Return DataFrame of genuinely new unique records added in the current session."""
+        if self.cleaned_df.empty:
+            return pd.DataFrame()
+        if "_import_id" in self.cleaned_df.columns:
+            new_df = self.cleaned_df[self.cleaned_df["_import_id"] != "EXISTING_MASTER"].copy()
+        else:
+            new_df = self.cleaned_df.copy()
+        display_cols = [c for c in new_df.columns if c not in PROVENANCE_COLS]
+        return new_df[display_cols]
 
     def get_duplicate_report_dataframe(self) -> pd.DataFrame:
         """Format duplicate audit records into a DataFrame for Excel export."""
@@ -250,6 +328,7 @@ class ConsolidationWorkflow:
             "Duplicate_Report": self.get_duplicate_report_dataframe(),
             "Processing_Summary": self.get_summary_dataframe(),
             "Review_Required": self.review_df,
+            "File_Breakdown": self.get_file_report_dataframe(),
         }
 
         success, msg, backup = self.master_manager.save_master(

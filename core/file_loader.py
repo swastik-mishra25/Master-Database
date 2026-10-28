@@ -3,6 +3,7 @@ File ingestion, sheet inspection, and encoding/delimiter detection for Excel and
 """
 import io
 import csv
+import hashlib
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union, Any
 import pandas as pd
@@ -12,6 +13,30 @@ try:
     import xlrd
 except ImportError:
     xlrd = None
+
+
+def compute_content_hash(file_input: Union[str, Path, io.BytesIO, bytes, Any]) -> str:
+    """Compute a SHA-256 hash of file content for reliable version and change tracking."""
+    try:
+        if isinstance(file_input, bytes):
+            return hashlib.sha256(file_input).hexdigest()
+        if hasattr(file_input, "getvalue"):
+            return hashlib.sha256(file_input.getvalue()).hexdigest()
+        if hasattr(file_input, "seek") and hasattr(file_input, "read"):
+            pos = file_input.tell() if hasattr(file_input, "tell") else 0
+            file_input.seek(0)
+            content = file_input.read()
+            file_input.seek(pos)
+            if isinstance(content, str):
+                content = content.encode("utf-8", errors="replace")
+            return hashlib.sha256(content).hexdigest()
+        if isinstance(file_input, (str, Path)):
+            p = Path(file_input)
+            if p.exists():
+                return hashlib.sha256(p.read_bytes()).hexdigest()
+    except Exception:
+        pass
+    return ""
 
 
 class LoadedDataset:
@@ -24,6 +49,7 @@ class LoadedDataset:
         df: pd.DataFrame,
         warnings: Optional[List[str]] = None,
         errors: Optional[List[str]] = None,
+        content_hash: str = "",
     ):
         self.source_filename = source_filename
         self.sheet_name = sheet_name
@@ -33,6 +59,7 @@ class LoadedDataset:
         self.columns = [str(c) for c in df.columns.tolist()]
         self.warnings = warnings or []
         self.errors = errors or []
+        self.content_hash = content_hash or ""
 
     def __repr__(self) -> str:
         return f"<LoadedDataset {self.source_filename} [{self.sheet_name}] rows={self.row_count} cols={self.column_count}>"
@@ -190,6 +217,7 @@ def read_csv_dataset(
 
     # Clean columns
     df = _clean_dataframe_columns(df, warnings)
+    content_hash = compute_content_hash(file_input)
 
     return LoadedDataset(
         source_filename=Path(filename).name,
@@ -197,6 +225,7 @@ def read_csv_dataset(
         df=df,
         warnings=warnings,
         errors=errors,
+        content_hash=content_hash,
     )
 
 
@@ -212,6 +241,7 @@ def read_excel_dataset(
     warnings: List[str] = []
     errors: List[str] = []
     lower_name = filename.lower()
+    content_hash = compute_content_hash(file_input)
 
     if hasattr(file_input, "seek"):
         file_input.seek(0)
@@ -246,6 +276,7 @@ def read_excel_dataset(
         df=df,
         warnings=warnings,
         errors=errors,
+        content_hash=content_hash,
     )
 
 
