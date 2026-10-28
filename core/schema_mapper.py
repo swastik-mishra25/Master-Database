@@ -8,22 +8,29 @@ from rapidfuzz import fuzz
 # Common semantic synonyms for tabular headers
 SYNONYM_GROUPS = [
     {"name", "company", "company name", "business", "business name", "organization", "org name", "account", "account name", "client", "client name"},
-    {"phone", "telephone", "phone number", "contact", "contact number", "mobile", "cell", "tel"},
-    {"email", "email address", "e-mail", "mail", "mail address"},
+    {"phone", "telephone", "phone number", "contact", "contact number", "mobile", "cell", "tel", "public phone number", "public phone numbers", "public phone"},
+    {"email", "email address", "e-mail", "mail", "mail address", "public email", "public business email", "public emails"},
     {"address", "street", "street address", "location", "addr"},
     {"city", "town", "municipality"},
     {"state", "province", "region"},
     {"zip", "zip code", "zipcode", "postal", "postal code", "postcode"},
     {"country", "nation"},
-    {"website", "url", "web", "web address", "domain"},
+    {"website", "url", "web", "web address", "domain", "company website", "company site", "homepage"},
     {"id", "identifier", "code", "item id", "product id", "customer id", "user id", "record id"},
     {"price", "cost", "amount", "total", "rate"},
-    {"date", "created date", "timestamp", "creation date", "time"},
+    {"date", "created date", "timestamp", "creation date", "time", "check time", "scanned at"},
     {"first name", "firstname", "given name", "forename"},
     {"last name", "lastname", "surname", "family name"},
     {"full name", "contact name", "person name", "employee name"},
-    {"notes", "comment", "comments", "description", "details"},
-    {"status", "state status", "condition"},
+    {"notes", "comment", "comments", "description", "details", "source excerpts", "evidence quotes", "evidence basis"},
+    {"status", "state status", "condition", "tier", "fit tier", "qualification tier"},
+    {"score", "fit score", "potential score", "icp score", "dakini score", "rating"},
+    {"industry", "target industry", "categories", "category", "sector"},
+    {"operating scale", "scale", "operating scale score"},
+    {"service fit", "service fit score", "workflow fit"},
+    {"buying signals", "buying signal", "intent signals", "growth signals"},
+    {"founding year", "founded year", "business start year", "start year", "year established"},
+    {"company age", "business age", "estimated age", "age"},
 ]
 
 
@@ -40,16 +47,21 @@ def normalize_header(header: str) -> str:
 
 
 ROOT_SYNONYM_MAP = {
-    "email": ["email", "emails", "e-mail", "mail", "mail address", "email address", "public emails"],
-    "phone": ["phone", "phones", "telephone", "mobile", "cell", "tel", "contact number", "contact no", "phone number", "public phone number", "public phone numbers"],
+    "email": ["email", "emails", "e-mail", "mail", "mail address", "email address", "public emails", "public business email", "public email"],
+    "phone": ["phone", "phones", "telephone", "mobile", "cell", "tel", "contact number", "contact no", "phone number", "public phone number", "public phone numbers", "public phone number s", "public phone"],
     "company": ["company", "company name", "business", "business name", "organization", "org name", "account", "client"],
-    "website": ["website", "web", "url", "web address", "domain", "company website", "homepage"],
-    "city": ["city", "town", "municipality", "city-level", "office city"],
-    "address": ["address", "street", "street address", "location", "addr"],
+    "website": ["website", "web", "url", "web address", "domain", "company website", "homepage", "company site", "company website clutch linked"],
+    "city": ["city", "town", "municipality", "city-level", "office city", "india-listed office location", "india listed office location", "office location"],
+    "address": ["address", "street", "street address", "location", "addr", "office location", "india-listed office location", "india listed office location"],
     "state": ["state", "province", "region"],
     "zip": ["zip", "zip code", "zipcode", "postal", "postal code", "postcode"],
     "country": ["country", "nation"],
     "revenue": ["revenue", "annual revenue", "turnover", "sales"],
+    "score": ["score", "fit score", "potential score", "icp score", "dakini score", "rating", "dakini ai fit score", "dakini ai fit score 0 100", "fit score 0 100"],
+    "tier": ["tier", "fit tier", "qualification tier", "dakini fit level", "fit level"],
+    "industry": ["industry", "target industry", "category", "sector"],
+    "age": ["age", "business age", "company age", "estimated age", "start year", "business start year", "founding year", "company age calendar year estimate as of 2026", "company age calendar-year estimate; as of 2026"],
+    "evidence": ["evidence", "evidence basis", "source excerpts", "evidence quotes", "source reference url", "workflow check", "dakini workflow evidence", "workflow evidence", "score basis", "dakini score components"],
 }
 
 

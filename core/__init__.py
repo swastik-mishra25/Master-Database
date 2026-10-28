@@ -10,6 +10,8 @@ from .resolver import resolve_duplicate_groups
 from .master_manager import MasterManager
 from .excel_exporter import write_master_excel_workbook, export_dataframe_to_csv, sanitize_for_formula_injection
 from .workflow import ConsolidationWorkflow
+from .connectors import DakiniConnector, load_dakini_dataset, inspect_dakini_sqlite
+from .sync_engine import DakiniSyncEngine
 
 __all__ = [
     "DATA_DIR",
@@ -38,4 +40,8 @@ __all__ = [
     "export_dataframe_to_csv",
     "sanitize_for_formula_injection",
     "ConsolidationWorkflow",
+    "DakiniConnector",
+    "load_dakini_dataset",
+    "inspect_dakini_sqlite",
+    "DakiniSyncEngine",
 ]

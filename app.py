@@ -19,6 +19,7 @@ from core.config import (
 from core.excel_exporter import export_dataframe_to_csv, write_master_excel_workbook
 from core.file_loader import (
     LoadedDataset,
+    compute_content_hash,
     detect_csv_properties,
     inspect_excel_sheets,
     read_csv_dataset,
@@ -27,6 +28,8 @@ from core.file_loader import (
 from core.master_manager import MasterManager
 from core.normalizer import PROVENANCE_COLS, is_blank
 from core.workflow import ConsolidationWorkflow
+from core.connectors import DakiniConnector, load_dakini_dataset, inspect_dakini_sqlite
+from core.sync_engine import DakiniSyncEngine
 
 # Page Configuration
 st.set_page_config(
@@ -131,6 +134,10 @@ def init_session_state():
         st.session_state.master_mode = "merge" if get_manager().exists() else "fresh"
     if "last_upload_signature" not in st.session_state:
         st.session_state.last_upload_signature = ""
+    if "dakini_dataset" not in st.session_state:
+        st.session_state.dakini_dataset = None
+    if "dakini_path" not in st.session_state:
+        st.session_state.dakini_path = ""
 
 
 init_session_state()
@@ -237,14 +244,115 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Step 1: Upload Files
-st.markdown("### 1. Upload Spreadsheets")
-uploaded_files = st.file_uploader(
-    "Drag and drop spreadsheet files here (.xlsx, .xls, .csv)",
-    type=["xlsx", "xls", "csv"],
-    accept_multiple_files=True,
-    key="unified_file_uploader",
-)
+# Step 1: Ingest Data Sources
+st.markdown("### 1. Ingest Data Sources")
+tab_files, tab_dakini = st.tabs(["📁 Spreadsheets (.xlsx, .xls, .csv)", "🤖 Dakini AI ICP Scraper Connector"])
+
+with tab_files:
+    uploaded_files = st.file_uploader(
+        "Drag and drop spreadsheet files here (.xlsx, .xls, .csv)",
+        type=["xlsx", "xls", "csv"],
+        accept_multiple_files=True,
+        key="unified_file_uploader",
+    )
+
+with tab_dakini:
+    st.markdown("Connect to your local **Dakini AI ICP Scraper** project to import discovered prospects, fit scores, and verified contact data.")
+    
+    local_candidates = DakiniConnector.find_local_dakini_files()
+    if local_candidates:
+        file_options = {str(c): f"{c.name} (in .../{c.parent.name})" for c in local_candidates}
+        selected_file = st.selectbox(
+            "⚡ Auto-Detected Dakini Files in Workspace:",
+            options=list(file_options.keys()),
+            format_func=lambda x: file_options[x],
+            index=0,
+            key="dakini_detected_selector",
+        )
+        if selected_file:
+            st.session_state.dakini_path = selected_file
+
+    col_d1, col_d2 = st.columns([3, 1])
+    with col_d1:
+        dakini_input_path = st.text_input(
+            "Dakini Project Folder, Database (.sqlite), or Dataset (.csv) Path:",
+            value=st.session_state.dakini_path,
+            placeholder=r"e.g. .dakini-state.sqlite or D:\Dakini_AI-icp-scraper",
+            help="Path to the Dakini project directory containing .dakini-state.sqlite, or direct path to the SQLite/CSV file.",
+        )
+    with col_d2:
+        tier_choice = st.selectbox(
+            "Score / Tier Filter:",
+            options=["All Prospects", "90+ High Potential only", "45+ Research & above"],
+            index=0,
+        )
+
+    col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1.5])
+    with col_btn1:
+        if st.button("🔍 Inspect Database", use_container_width=True):
+            if dakini_input_path:
+                st.session_state.dakini_path = dakini_input_path
+                res = inspect_dakini_sqlite(dakini_input_path)
+                if res["success"]:
+                    st.success(f"Connected! Database found at `{res['db_path']}` ({res['total_prospects']:,} records)")
+                    with st.expander("View Tables & Structure", expanded=True):
+                        st.json(res["tables"])
+                else:
+                    st.error(f"Failed to connect: {res.get('error')}")
+            else:
+                st.warning("Please provide a path to Dakini project or database.")
+
+    with col_btn2:
+        if st.button("📥 Import Prospects", type="primary", use_container_width=True):
+            if dakini_input_path:
+                st.session_state.dakini_path = dakini_input_path
+                try:
+                    min_sc = 90 if "90+" in tier_choice else (45 if "45+" in tier_choice else None)
+                    ds = load_dakini_dataset(dakini_input_path, min_score=min_sc)
+                    st.session_state.dakini_dataset = ds
+                    st.success(f"Successfully loaded {ds.row_count:,} prospects from Dakini AI!")
+                    st.rerun()
+                except Exception as ex:
+                    st.error(f"Error loading Dakini prospects: {str(ex)}")
+            else:
+                st.warning("Please provide a path to Dakini project or database.")
+
+    with col_btn3:
+        if st.session_state.dakini_dataset is not None:
+            if st.button("❌ Remove Loaded Dakini Prospects", use_container_width=True):
+                st.session_state.dakini_dataset = None
+                st.rerun()
+
+    if st.session_state.dakini_dataset is not None:
+        dak = st.session_state.dakini_dataset
+        st.info(f"✅ **Active Dakini Dataset:** `{dak.source_filename}` — **{dak.row_count:,}** prospects loaded.")
+
+    st.markdown("---")
+    st.markdown("#### ⚡ Dynamic Direct Sync to `Master.xlsx`")
+    st.caption("Automatically identify genuinely new or changed leads, deduplicate, merge missing info, and update `data/Master.xlsx` with an instant safety backup.")
+
+    sync_engine = DakiniSyncEngine()
+    sync_status = sync_engine.get_status()
+
+    col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
+    with col_s1:
+        st.write(f"**Last Sync:** {sync_status['last_sync']}")
+        st.caption(f"Active Source: `{sync_status['active_source']}`")
+    with col_s2:
+        sync_min_sc = 90 if "90+" in tier_choice else (45 if "45+" in tier_choice else None)
+        if st.button("🔄 Sync Unique Leads Now", type="primary", use_container_width=True):
+            with st.spinner("Syncing unique and updated leads from Dakini to Master.xlsx..."):
+                sync_res = sync_engine.sync_once(min_score=sync_min_sc, force=True)
+                if sync_res["success"]:
+                    st.success(f"✅ Sync Complete! +{sync_res['new_leads']} new leads added. Master now has {sync_res['total_master_rows']:,} rows.")
+                    if sync_res.get("backup_created"):
+                        st.caption(f"Safety backup created: `{sync_res['backup_created']}`")
+                    st.rerun()
+                else:
+                    st.error(f"Sync failed: {sync_res.get('error')}")
+    with col_s3:
+        if st.button("⏱️ Background Daemon Info", use_container_width=True, help="Run 'python sync_daemon.py' in a terminal for real-time 24/7 background sync."):
+            st.info("💡 To keep Master.xlsx continuously updated in the background as Dakini finds leads, run:\n`python sync_daemon.py --interval 30`")
 
 all_loaded: List[LoadedDataset] = []
 
@@ -290,7 +398,10 @@ if uploaded_files:
             except Exception as ex:
                 st.error(f"Error loading {fname}: {str(ex)}")
 
-    st.session_state.loaded_datasets = all_loaded
+if st.session_state.dakini_dataset is not None:
+    all_loaded.append(st.session_state.dakini_dataset)
+
+if all_loaded:
     total_incoming_rows = sum(d.row_count for d in all_loaded)
 
     # Invalidate stale processing state if uploaded files or sheet selections changed

@@ -1,0 +1,4 @@
+node_modules/
+.env
+.dakini-state.json
+.dakini-state.sqlite*

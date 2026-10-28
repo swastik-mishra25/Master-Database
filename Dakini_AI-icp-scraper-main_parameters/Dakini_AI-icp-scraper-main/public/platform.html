@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dakini AI ICP Scraper</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Dakini AI ICP Scraper home"><span class="brand-mark">D</span><span class="brand-name">Dakini AI <span>ICP Scraper</span></span></a>
+    <nav aria-label="Main navigation">
+      <a class="active" href="#prospects">Prospects</a>
+      <a id="setupNav" href="#setup">Configuration</a>
+    </nav>
+  </header>
+  <main class="container">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">INTELLIGENT PROSPECTING</p>
+        <h1>Find your next voice-agent customer</h1>
+        <p class="muted">Discover businesses where Dakini AI can make a measurable difference. Review evidence, prioritize fit, and connect with public business contacts.</p>
+      </div>
+      <p id="modeNotice" class="mode-notice"></p>
+    </section>
+
+    <section class="discovery-banner engine-banner">
+      <div class="discovery-copy engine-copy">
+        <div class="engine-header-row">
+          <p class="eyebrow">AUTOMATED RESEARCH ENGINE</p>
+          <div class="engine-status-pill-badge" id="engineBadge">
+            <span class="engine-pulse-dot"></span>
+            <span id="engineBadgeText">AUTONOMOUS ENGINE PAUSED</span>
+          </div>
+        </div>
+        <h2>Autonomous ICP Research</h2>
+        <p class="muted">Searches public sources on the configured schedule for growth, ecosystem, e-commerce, registry, contact, technology, franchise, and language signals; crawls permitted company pages and ranks prospects against Dakini AI capabilities. Review evidence and qualify every result before outreach.</p>
+        <div class="engine-controls-row">
+          <label class="engine-mode-select-label">
+            <span>Automation Mode:</span>
+            <select id="engineModeSelect">
+              <option value="continuous">Continuous (high search and crawl activity)</option>
+              <option value="interval">Every 15 Minutes</option>
+              <option value="hourly">Every 1 Hour</option>
+              <option value="daily" selected>Daily (configured schedule)</option>
+            </select>
+          </label>
+          <div class="engine-action-buttons">
+            <button id="engineToggleBtn" class="engine-toggle-button" type="button">▶ Start Engine</button>
+            <button id="runDiscoveryBtn" class="primary-action engine-run-button" type="button"><span aria-hidden="true">⚡</span> Run Cycle Now</button>
+          </div>
+        </div>
+
+        <div class="engine-metrics-bar">
+          <div class="engine-metric-chip">
+            <span class="chip-label">Cycles</span>
+            <strong id="engineCyclesCount">0</strong>
+          </div>
+          <div class="engine-metric-chip">
+            <span class="chip-label">Engine State</span>
+            <strong id="engineStateLabel">Paused</strong>
+          </div>
+          <div class="engine-metric-chip engine-metric-wide">
+            <span class="chip-label">Live Activity</span>
+            <span id="discoveryStatus" class="discovery-status" role="status" aria-live="polite">Loading engine status…</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <details class="card engine-terminal-card" open>
+      <summary class="terminal-summary">
+        <div class="terminal-summary-left">
+          <span class="terminal-live-beacon"></span>
+          <strong>Engine Activity Feed</strong>
+          <span class="muted">(Searches, visited company domains, and matched workflows)</span>
+        </div>
+        <span class="terminal-badge" id="terminalStatusBadge">CONNECTING</span>
+      </summary>
+      <div id="engineLiveConsole" class="engine-terminal-console" role="log" aria-live="polite">
+        <div class="terminal-line info">Connecting to the autonomous engine event stream…</div>
+      </div>
+    </details>
+
+    <section id="prospects" class="card results-card">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">PROSPECT PORTFOLIO</p>
+          <h2>Potential clients</h2>
+          <p class="muted section-subtitle">Ranked by evidence of operational fit and Dakini AI relevance.</p>
+        </div>
+        <div class="export-actions">
+          <button id="downloadCsvBtn" class="secondary-button" type="button">Download spreadsheet (CSV)</button>
+          <button id="researchLowerFitBtn" class="secondary-button" type="button">Re-research all Lower fit</button>
+          <span id="lowerFitResearchStatus" class="muted" role="status" aria-live="polite"></span>
+          <button id="researchStaleBtn" class="secondary-button" type="button">Refresh stale saved leads</button>
+          <span id="staleResearchStatus" class="muted" role="status" aria-live="polite"></span>
+          <button id="clearScrapedDataBtn" class="secondary-button" type="button">Clear scraped data</button>
+          <span id="downloadStatus" class="muted" role="status" aria-live="polite"></span>
+          <button id="googleSheetsBtn" class="google-button" type="button" disabled>Connect to Google Sheets</button>
+          <span id="googleStatus" class="muted" role="status"></span>
+        </div>
+      </div>
+      <p class="results-disclaimer">Fit scores are rule-based research priorities, not purchase probabilities. Company legitimacy labels summarize first-party website evidence; they are not legal or registry verification. Source excerpts are evidence of what a page says, not independently verified facts; directory-only entries have not had company operations checked. Suggested Dakini workflows are hypotheses to validate. Public contacts may not identify a decision-maker.</p>
+      <details class="score-guide">
+        <summary>How is the potential-client score measured?</summary>
+        <p class="muted">The score reflects evidence that Dakini AI's published customer-service, sales, and knowledge agents could help this company through multilingual support, customer-context lookup, human escalation, and system integrations. AI/voice/contact-center solution vendors are penalized as competitors. <a href="https://www.dakini-ai.com/" target="_blank" rel="noopener noreferrer">View Dakini AI's public capabilities</a>. This is a prospecting heuristic, not a purchase probability.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col">Signal</th><th scope="col">Maximum</th><th scope="col">How points are awarded</th></tr></thead>
+            <tbody>
+              <tr><td>Service fit</td><td>30</td><td>15 for the first distinct confirmed Dakini workflow, 10 for the second, then 5 for each additional distinct workflow up to 30. Equivalent workflow labels are deduplicated. Adjacent needs are shown as suggestions but do not add core service-fit points.</td></tr>
+              <tr><td>Operating scale</td><td>25</td><td>5 for customer-facing support/sales staff, 4 for multiple branches, 8 for high customer/call volumes, 4 for extended hours, and 4 for relevant support/sales hiring.</td></tr>
+              <tr><td>India and language fit</td><td>5</td><td>3 for evidence of an India market presence and 2 for multilingual, regional-language, dialect, or accent needs.</td></tr>
+              <tr><td>Integration readiness</td><td>8</td><td>5 for CRM/telephony/contact-center systems and 3 for APIs, customer records, or integration evidence.</td></tr>
+              <tr><td>Buying / growth signals</td><td>15</td><td>12 for explicit evaluation or adoption of AI/voice automation and 3 for expansion. Relevant hiring is counted only under operating scale.</td></tr>
+              <tr><td>Public contactability</td><td>5</td><td>3 for a public business email and 2 for a phone number.</td></tr>
+              <tr><td>First-party workflow evidence</td><td>12</td><td>4 for customer-support options, 3 for a working enquiry form, 3 for FAQs, and 2 for booking workflows found on scanned company pages. Presence is not proof of an unmet need.</td></tr>
+              <tr><td>AI vendor exclusion</td><td>Score cap: 20</td><td>AI voice-agent, conversational AI, or contact-center solution providers are treated as competitors, excluded from High potential/Research, and capped at 20.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted"><strong>High potential:</strong> score ≥90, configured ICP criteria match, a Dakini-aligned workflow is detected, and an explicit, non-negated buying/automation signal is present. <strong>Research:</strong> score ≥45, ICP criteria match, a core workflow is evidenced, and an operating-scale or integration signal is present. Appointment and booking signals alone are adjacent opportunities, not proof of fit with Dakini's published capabilities. Industry aliases (for example, BFSI and Banking &amp; Financial Services) are normalized for ICP matching. ICP industry, use-case, and location settings gate the tier but do not add score points. All tiers require human review. Saved records are rescored when the server next starts; an active discovery run is not interrupted.</p>
+      </details>
+      <p id="googleSetupHelp" class="google-help" role="status"></p>
+      <div class="metrics-heading"><span class="eyebrow">PORTFOLIO OVERVIEW</span><span class="muted">Updated from current prospect records</span></div>
+      <div id="dashboard" class="stats"></div>
+      <div class="lead-controls">
+        <label class="search-label">Search companies
+          <input id="companySearch" type="search" placeholder="Company, use case, industry, email or phone">
+        </label>
+        <label>Industry
+          <select id="industryFilter">
+            <option value="all">All industries</option>
+          </select>
+        </label>
+        <label>Fit
+          <select id="tierFilter">
+            <option value="all" selected>All prospects · highest score first</option>
+            <option value="Priority">High-potential (90+ score + fit and buying signal)</option>
+            <option value="Review">Research</option>
+            <option value="Low fit">Lower fit</option>
+          </select>
+        </label>
+        <label>Company legitimacy evidence
+          <select id="legitimacyFilter">
+            <option value="all">All evidence levels</option>
+            <option value="strong_evidence">Strong website evidence</option>
+            <option value="review">Needs review</option>
+            <option value="unverified">Unverified</option>
+            <option value="directory_only">Directory only</option>
+            <option value="not_assessed">Not assessed</option>
+          </select>
+        </label>
+      </div>
+      <p id="resultCount" class="muted result-count"></p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Rank</th>
+              <th scope="col">Company</th>
+              <th scope="col">Company age</th>
+              <th scope="col">India office (city)</th>
+              <th scope="col">Fit</th>
+              <th scope="col">Detected workflow signal</th>
+              <th scope="col">Public contact details</th>
+              <th scope="col">Details</th>
+            </tr>
+          </thead>
+          <tbody id="companies"></tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <button id="prevPage" type="button" class="secondary-button">Previous</button>
+        <span id="pageLabel" class="muted"></span>
+        <button id="nextPage" type="button" class="secondary-button">Next</button>
+      </div>
+    </section>
+
+    <details id="setup" class="card setup-card">
+      <summary>
+        <span><span class="eyebrow">TARGETING &amp; DATA</span><strong>ICP, sources &amp; crawl controls</strong></span>
+        <span class="muted">Configure target companies or run another crawl</span>
+      </summary>
+      <div class="setup-grid">
+        <section class="setup-panel crawl-panel">
+          <h2>Daily web discovery</h2>
+          <p class="muted">Daily goal: 300 newly captured, legitimacy-qualified High-potential prospects only (90+ score, ICP/workflow match, explicit buying signal). Research-tier and lower-scoring records remain available under their filters but do not count toward this goal. This is best-effort; provider quotas, public search coverage, and qualification checks can cause a shortfall.</p>
+          <ol class="source-architecture" aria-label="Daily 300-prospect discovery flow">
+            <li><strong>Discover</strong><span>Search rotating industry, growth/news, partner and technology, e-commerce, contact, franchise, and language signals</span></li>
+            <li><strong>Deduplicate</strong><span>Skip company domains already captured</span></li>
+            <li><strong>Verify</strong><span>Crawl permitted pages and check company legitimacy and ICP fit</span></li>
+            <li><strong>Count & repeat</strong><span>Count only qualified new prospects and rotate query batches until 300 or the next daily window</span></li>
+          </ol>
+          <p class="muted">Scheduled for 09:00 Asia/Kolkata by default. The server must remain online; reaching 300 is a target, not a guarantee.</p>
+          <p id="discoverySetupStatus" class="status-note"></p>
+        </section>
+        <section class="setup-panel crawl-panel">
+          <h2>Geographic business discovery</h2>
+          <p class="muted">Discover businesses from OpenStreetMap, Wikidata, and an optional configured SearXNG instance for a city, state, and country. Results enter the same permitted website crawl, contact extraction, legitimacy verification, ICP scoring, portfolio, and CSV export as every other prospect.</p>
+          <form id="geographicDiscoveryForm">
+            <label class="form-field">City or locality
+              <input id="geographicCity" maxlength="100" placeholder="e.g. Chennai" required>
+            </label>
+            <label class="form-field">State or region
+              <input id="geographicState" maxlength="100" placeholder="e.g. Tamil Nadu">
+            </label>
+            <label class="form-field">Country
+              <input id="geographicCountry" maxlength="100" value="India" required>
+            </label>
+            <label class="form-field">Industry or category
+              <input id="geographicCategory" maxlength="100" value="all" placeholder="e.g. Clinics, Retail, Hotels">
+            </label>
+            <label class="form-field">Maximum candidates
+              <input id="geographicLimit" type="number" min="1" max="200" value="50" required>
+            </label>
+            <button id="geographicDiscoveryBtn" type="submit" class="secondary-button">Discover businesses</button>
+          </form>
+          <p id="geographicDiscoveryStatus" class="status-note" role="status" aria-live="polite"></p>
+          <small class="muted">OpenStreetMap data is © OpenStreetMap contributors and available under the <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">Open Database License</a>. Wikidata is CC0. Optional SearXNG requires a configured endpoint. Service availability and usage limits apply; source records are not treated as company verification.</small>
+        </section>
+        <section class="setup-panel">
+          <h2>Define your ICP</h2>
+          <p class="muted">Choose target industries and workflows, then optionally narrow discovery by geography.</p>
+          <form id="icpForm">
+            <label class="form-field">Profile name
+              <input id="icpName" placeholder="ICP name" value="Dakini AI Opportunity Discovery - India">
+            </label>
+            <label class="form-field">Target industries (comma-separated)
+              <input id="industries" placeholder="Clinics, Real Estate Agencies, Hotels, Recruitment Firms, Education Centres" value="Clinics, Real Estate Agencies, Hotels, Recruitment Firms, Education Centres">
+              <small>Include any target sectors, such as clinics, real estate, hotels, recruitment, and education. Discovery also looks for booking, hiring, branch-scale, and public website workflow signals.</small>
+            </label>
+            <label class="checkbox-label">
+              <input id="anyLocation" type="checkbox" checked>
+              Search target industries regardless of location
+            </label>
+            <p id="locationModeNote" class="muted">Location filters are disabled; industry discovery covers any location.</p>
+            <fieldset class="location-picker">
+              <legend>Target states / union territories</legend>
+              <small>Select India for nationwide coverage, or choose individual regions.</small>
+              <div id="stateButtons" class="location-button-grid" role="group" aria-label="Choose target states and union territories"></div>
+            </fieldset>
+            <fieldset class="location-picker">
+              <legend>Target areas, cities, or districts</legend>
+              <small>Optional. Select a suggested city or add a custom district/locality.</small>
+              <div id="areaButtons" class="location-button-grid" role="group" aria-label="Choose target cities"></div>
+              <div id="selectedAreas" class="selected-locations" aria-live="polite"></div>
+              <div class="add-area-control">
+                <input id="customArea" placeholder="e.g. Whitefield, Bengaluru" aria-label="Custom city, district, or locality">
+                <button id="addAreaBtn" class="secondary-button" type="button">Add area</button>
+              </div>
+            </fieldset>
+            <label class="form-field">Relevant workflows
+              <input id="useCases" placeholder="e.g. appointments, customer support, bookings, branch queries" value="Customer Support, Appointment Scheduling, Reservations and Bookings, Branch and Service Queries, Lead Qualification">
+            </label>
+            <button>Create ICP</button>
+          </form>
+          <pre id="icpResult"></pre>
+        </section>
+        <section class="setup-panel">
+          <h2>Discover new public data sources</h2>
+          <p class="muted">Search for public directories and company lists matching saved industries across India, its states, and union territories. Candidates are checked and wait for your approval before their listed companies are crawled.</p>
+          <p class="muted">The system runs eight source searches per scan by default. Retrieval observes each website's robots.txt rules and crawl delay.</p>
+          <ol class="source-architecture" aria-label="Automatic source discovery stages">
+            <li><strong>Find</strong><span>Rotate searches across ICPs and public-data source types</span></li>
+            <li><strong>Validate</strong><span>Check directory signals and outbound company sites</span></li>
+            <li><strong>Approve</strong><span>Review the source before visiting listed companies</span></li>
+            <li><strong>Retrieve</strong><span>Revisit approved directories and rank new companies</span></li>
+          </ol>
+          <button id="findSourcesBtn" class="secondary-button" type="button">Find data sources</button>
+          <button id="retrieveSourcesBtn" class="secondary-button" type="button">Retrieve approved sources</button>
+          <label class="checkbox-label">
+            <input id="includeCuratedSources" type="checkbox">
+            Include curated directories in this manual run
+          </label>
+          <p class="muted">Approval authorizes the system to revisit this directory and retrieve its current and future public listings without asking again for each company. Newly listed companies are deduplicated and checked against robots.txt before retrieval.</p>
+          <p id="sourceDiscoveryStatus" class="status-note" role="status" aria-live="polite"></p>
+          <div id="sourceCandidateList" class="public-source-list" aria-live="polite"></div>
+        </section>
+        <section class="setup-panel">
+          <h2>Approved directory sources</h2>
+          <p class="muted">These directories can be revisited on schedule and manually. Review the source approval before it is used.</p>
+          <div id="approvedDirectoryList" class="public-source-list" aria-live="polite"></div>
+          <h2>Verified public directories</h2>
+          <p class="muted">Only verified starting sources are listed here. Discover and review a public directory if none are configured.</p>
+          <div id="publicSourceList" class="public-source-list" aria-live="polite"></div>
+          <pre id="publicSourceResult"></pre>
+        </section>
+        <section class="setup-panel">
+          <h2>Add an approved source</h2>
+          <p class="muted">Add a company website or a public directory containing company links.</p>
+          <form id="sourceForm">
+            <label class="form-field">Source name
+              <input id="sourceName" placeholder="e.g. Company Directory" value="Company Directory">
+            </label>
+            <label class="form-field">Public website or directory URL
+              <input id="sourceUrl" type="url" placeholder="https://example.com" value="https://example.com/company-directory">
+            </label>
+            <label class="checkbox-label"><input id="approved" type="checkbox" checked> Approved</label>
+            <button>Add Source</button>
+          </form>
+          <pre id="sourceResult"></pre>
+        </section>
+        <section class="setup-panel crawl-panel">
+          <h2>Run a prospect crawl</h2>
+          <p class="muted">Crawls approved sources, discovers directory-listed companies, and checks up to eight relevant pages per company.</p>
+          <button id="crawlBtn" type="button">Run ICP Crawl</button>
+          <pre id="jobResult">No crawl running.</pre>
+        </section>
+      </div>
+    </details>
+  </main>
+  <script src="/phone-numbers.js"></script>
+  <script src="/company-age.js"></script>
+  <script src="/csv-export.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+{
+  "name": "dakini-icp-poc",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Single-server Dakini AI prospect research and ICP scoring platform",
+  "main": "server.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test --test-concurrency=1",
+    "backup": "node backup-database.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "cheerio": "^1.0.0",
+    "dotenv": "^18.0.5",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.7.1",
+    "googleapis": "^183.0.0",
+    "robots-parser": "^3.0.1",
+    "undici": "^7.30.0",
+    "zod": "^4.1.12"
+  }
+}
