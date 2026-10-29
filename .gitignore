@@ -1,0 +1,55 @@
+# ========================================================
+# Excel & Spreadsheet Files (Never upload to GitHub)
+# ========================================================
+*.xlsx
+*.xls
+*.xlsm
+*.xlsb
+*.xltx
+*.xltm
+*.csv
+
+# Preserve synthetic test samples in sample_data
+!sample_data/*.xlsx
+!sample_data/*.csv
+
+# ========================================================
+# Master Database Directories & State
+# ========================================================
+data/Master.xlsx
+data/temp_*.xlsx
+data/*.log
+data/*.pid
+data/.dakini_sync_state.json
+backups/
+temp/
+
+# ========================================================
+# Local Databases & Runtime Artifacts
+# ========================================================
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3
+*.db
+.dakini-state.sqlite*
+
+# ========================================================
+# Python Cache & Environments
+# ========================================================
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# ========================================================
+# Node & Environment Secrets
+# ========================================================
+node_modules/
+npm-debug.log*
+.env
+.env.*
+!.env.example
+
