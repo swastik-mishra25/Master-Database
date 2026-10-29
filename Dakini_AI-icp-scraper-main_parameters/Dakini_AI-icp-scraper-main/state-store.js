@@ -1,6 +1,68 @@
 const fs = require("node:fs");
 const path = require("node:path");
-const Database = require("better-sqlite3");
+let Database;
+try {
+  Database = require("better-sqlite3");
+} catch {
+  const { DatabaseSync } = require("node:sqlite");
+
+  Database = class NodeSqliteAdapter {
+    constructor(databasePath) {
+      this.db = new DatabaseSync(databasePath);
+    }
+
+    pragma(cmd, options = {}) {
+      const match = cmd.match(/^([a-zA-Z_]+)\s*=\s*(.+)$/);
+      if (match) {
+        this.db.exec(`PRAGMA ${cmd};`);
+        return;
+      }
+      try {
+        const stmt = this.db.prepare(`PRAGMA ${cmd};`);
+        const row = stmt.get();
+        if (options.simple && row) {
+          return Object.values(row)[0];
+        }
+        return row ? [row] : [];
+      } catch {
+        return [];
+      }
+    }
+
+    exec(sql) {
+      this.db.exec(sql);
+    }
+
+    prepare(sql) {
+      const stmt = this.db.prepare(sql);
+      return {
+        run: (...params) => stmt.run(...params),
+        get: (...params) => stmt.get(...params) || undefined,
+        all: (...params) => stmt.all(...params),
+      };
+    }
+
+    transaction(fn) {
+      return (...args) => {
+        this.db.exec("BEGIN;");
+        try {
+          const result = fn(...args);
+          this.db.exec("COMMIT;");
+          return result;
+        } catch (error) {
+          try {
+            this.db.exec("ROLLBACK;");
+          } catch {}
+          throw error;
+        }
+      };
+    }
+
+    close() {
+      this.db.close();
+    }
+  };
+}
 
 const COLLECTIONS = [
   "icps",

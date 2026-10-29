@@ -2,7 +2,31 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const Database = require("better-sqlite3");
+let Database;
+try {
+  Database = require("better-sqlite3");
+} catch {
+  const { DatabaseSync } = require("node:sqlite");
+  Database = class {
+    constructor(p, opts = {}) {
+      this.db = new DatabaseSync(p, { readOnly: Boolean(opts.readonly) });
+    }
+    pragma(cmd) {
+      const row = this.db.prepare(`PRAGMA ${cmd}`).get();
+      return row ? [{ ...row }] : [];
+    }
+    prepare(sql) {
+      const stmt = this.db.prepare(sql);
+      return {
+        get: (...a) => stmt.get(...a),
+        all: (...a) => stmt.all(...a),
+      };
+    }
+    close() {
+      this.db.close();
+    }
+  };
+}
 const { after, test } = require("node:test");
 const { createDatabaseBackup } = require("../backup-database");
 const { createStateStore } = require("../state-store");

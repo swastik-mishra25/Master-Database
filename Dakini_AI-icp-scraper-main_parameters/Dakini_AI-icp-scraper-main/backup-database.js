@@ -1,6 +1,40 @@
 const fs = require("node:fs");
 const path = require("node:path");
-const Database = require("better-sqlite3");
+let Database;
+try {
+  Database = require("better-sqlite3");
+} catch {
+  const { DatabaseSync } = require("node:sqlite");
+  Database = class NodeSqliteBackupAdapter {
+    constructor(filePath, options = {}) {
+      this.db = new DatabaseSync(filePath, { readOnly: Boolean(options.readonly) });
+    }
+    async backup(destPath) {
+      const normalized = destPath.replace(/\\/g, "/").replace(/'/g, "''");
+      this.db.exec(`VACUUM INTO '${normalized}';`);
+    }
+    pragma(cmd) {
+      try {
+        const stmt = this.db.prepare(`PRAGMA ${cmd};`);
+        const row = stmt.get();
+        return row ? [row] : [];
+      } catch {
+        return [];
+      }
+    }
+    prepare(sql) {
+      const stmt = this.db.prepare(sql);
+      return {
+        get: (...args) => stmt.get(...args),
+        all: (...args) => stmt.all(...args),
+        run: (...args) => stmt.run(...args),
+      };
+    }
+    close() {
+      this.db.close();
+    }
+  };
+}
 
 async function createDatabaseBackup(sourcePath, destinationPath) {
   const resolvedSource = path.resolve(sourcePath);
