@@ -3,6 +3,7 @@ Master Spreadsheet Management System
 Clean, unified single-page application for consolidating, deduplicating, and managing Excel and CSV spreadsheets.
 """
 import io
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -288,9 +289,11 @@ with tab_dakini:
     with col_proc3:
         if sc_status["running"]:
             if st.button("🔄 Restart Scraper", use_container_width=True):
-                scraper_manager.stop()
-                time.sleep(1)
-                scraper_manager.start(live_mode=True)
+                ok, msg = scraper_manager.restart(live_mode=True)
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
                 st.rerun()
 
     st.markdown("---")

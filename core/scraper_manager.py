@@ -114,13 +114,17 @@ class ScraperManager:
             if os.name == "nt":
                 creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP
 
+            log_file = self.dakini_dir.parent.parent / "data" / "dakini_scraper.log"
+            log_file.parent.mkdir(parents=True, exist_ok=True)
+            self._log_fh = open(log_file, "a", encoding="utf-8")
+
             self._proc = subprocess.Popen(
                 ["node", "server.js"],
                 cwd=str(self.dakini_dir),
                 env=env,
                 creationflags=creation_flags,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=self._log_fh,
+                stderr=self._log_fh,
             )
 
             self._write_pid(self._proc.pid)
@@ -190,6 +194,12 @@ class ScraperManager:
         if killed or not self.is_running():
             return True, "Dakini AI scraper stopped successfully."
         return False, "Could not verify that the scraper process terminated."
+
+    def restart(self, live_mode: bool = False) -> Tuple[bool, str]:
+        """Stop and restart the Dakini AI scraper."""
+        self.stop()
+        time.sleep(1.0)
+        return self.start(live_mode=live_mode)
 
 
 # Global singleton instance

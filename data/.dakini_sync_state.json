@@ -1,7 +1,7 @@
 {
-  "last_sync_timestamp": "2026-10-29 09:24:28",
+  "last_sync_timestamp": "2026-10-29 10:08:19",
   "last_source_path": "D:\\Master Database\\Dakini_AI-icp-scraper-main_parameters\\Dakini_AI-icp-scraper-main\\.dakini-state.sqlite",
-  "last_source_hash": "4013c6d7eba56b7357aba558738e417c08bf4beeb6a2d51f2e219a329ed56815",
-  "total_synced_leads": 1,
+  "last_source_hash": "fc460167a306fb1b55ceb6320d9cc4d5d1ec1c1b8a37e3d3482820207c3a7ab7",
+  "total_synced_leads": 103,
   "lead_signatures": {}
 }
