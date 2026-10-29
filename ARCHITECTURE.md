@@ -16,86 +16,46 @@ The **Master Spreadsheet Management System** is a lightweight, local-first data 
 
 ---
 
-## 2. High-Level Architecture Diagram
+## 2. High-Level Architecture Diagram (HLD)
+
+The system operates as a unified 3-stage pipeline: **Ingest** ➔ **Consolidate** ➔ **Persist**.
 
 ```mermaid
-graph TD
-    subgraph UI_Layer ["Presentation Layer (Streamlit)"]
-        UI["app.py (Single-Page Workspace, Dakini Controller & Sidebar)"]
+flowchart LR
+    subgraph SOURCELAYER ["1. Data Sources"]
+        direction TB
+        FILES["📁 Spreadsheets<br>(.xlsx, .xls, .csv uploads)"]
+        SCRAPER["🤖 Dakini AI Scraper<br>(Web & Directory Leads)"]
     end
 
-    subgraph Process_Coordinator ["Process & Lifecycle Coordination"]
-        ORCH["Unified Runner (run_integrated_system.py)"]
-        SMAN["Scraper Manager (core/scraper_manager.py)"]
+    subgraph PIPELAYER ["2. Consolidation Hub (core/)"]
+        direction TB
+        MAPPER["🔄 Schema Alignment<br>& Semantic Mapping"]
+        DEDUP["🔍 Exact & Fuzzy<br>Deduplication"]
+        MERGE["✨ Complementary Merge<br>(Enrich missing fields)"]
+        
+        MAPPER --> DEDUP --> MERGE
     end
 
-    subgraph External_Systems ["Scraper & Discovery Engines"]
-        DAKINI["Dakini AI ICP Scraper (Node.js/Express :3000)"]
-        DAKINI_DB[("Dakini SQLite (.dakini-state.sqlite)")]
-        DAKINI_CSV["Enriched Prospect CSVs"]
+    subgraph OUTPUTLAYER ["3. Master Database"]
+        direction TB
+        MASTER[("📊 data/Master.xlsx<br>(Clean Single Source of Truth)")]
+        BACKUPS[("🛡️ backups/<br>(Timestamped Safety Copies)")]
     end
 
-    subgraph Sync_Layer ["Dynamic Real-Time Synchronization"]
-        SYNC["DakiniSyncEngine (core/sync_engine.py)"]
-        DAEMON["sync_daemon.py (Continuous Background Watcher)"]
-        SYNC_STATE[("data/.dakini_sync_state.json")]
-    end
-
-    subgraph Orchestration ["Orchestration Layer"]
-        WF["ConsolidationWorkflow (core/workflow.py)"]
-    end
-
-    subgraph Engines ["Core Processing Engines"]
-        FL["File Loader & Sniffer (core/file_loader.py)"]
-        CONN["Dakini Connector (core/connectors/dakini_connector.py)"]
-        SM["Schema Mapper & Synonyms (core/schema_mapper.py)"]
-        NORM["Safe Normalizer (core/normalizer.py)"]
-        DEDUP["Duplicate Detection Engine (core/duplicate_engine.py)"]
-        RES["Resolution & Merge Engine (core/resolver.py)"]
-        EXP["Excel & CSV Exporter (core/excel_exporter.py)"]
-        MM["Master Manager (core/master_manager.py)"]
-    end
-
-    subgraph Storage ["Local File System Persistence (Git-Ignored)"]
-        DISK_MASTER[("data/Master.xlsx")]
-        BACKUPS[("backups/Master_backup_*.xlsx")]
-        TEMP[("temp/temp_*.xlsx")]
-    end
-
-    ORCH --> UI
-    ORCH --> SMAN
-    ORCH --> DAKINI
-    ORCH --> SYNC
-
-    SMAN --> DAKINI
-    DAKINI --> DAKINI_DB
-    DAKINI --> DAKINI_CSV
-
-    SYNC --> DAKINI_DB
-    SYNC --> DAKINI_CSV
-    SYNC --> SYNC_STATE
-    SYNC --> WF
-
-    DAEMON --> SYNC
-
-    UI --> WF
-    UI --> SMAN
-    UI --> SYNC
-    WF --> FL
-    WF --> CONN
-    WF --> SM
-    WF --> NORM
-    WF --> DEDUP
-    WF --> RES
-    WF --> EXP
-    WF --> MM
-
-    MM --> DISK_MASTER
-    MM --> BACKUPS
-    MM --> TEMP
-    EXP --> UI
-    EXP --> DISK_MASTER
+    SOURCELAYER --> PIPELAYER
+    PIPELAYER --> MASTER
+    PIPELAYER -.-> BACKUPS
 ```
+
+### Simplified System Layers
+
+| Layer | Primary Role | What It Does |
+| :--- | :--- | :--- |
+| **1. Ingestion** | Multi-source data input | Ingests spreadsheet files (`.xlsx`, `.xls`, `.csv`) and live prospects from the **Dakini AI Scraper** (`.dakini-state.sqlite`). |
+| **2. Consolidation** | Data cleaning & intelligence | Standardizes headers, identifies duplicates, fills blank fields via complementary merging, and escapes formula injections. |
+| **3. Persistence** | Single source of truth | Safely writes the cleaned records into **`data/Master.xlsx`** using atomic operations, maintaining automatic safety backups in **`backups/`**. |
+| **4. Control Plane** | Coordinated operation | Single unified runner (**`run_integrated_system.py`**) launches the Scraper, Dynamic Sync, and Streamlit UI together, and terminates all processes on shutdown. |
 
 ---
 
@@ -236,7 +196,172 @@ sequenceDiagram
 
 ---
 
-## 5. Directory Structure & File Layout
+## 5. System Design: In-Depth Data Analysis & Intelligence Engine
+
+The Data Analysis & Intelligence Engine forms the analytical core of the platform. It transforms raw, fragmented, multi-source records (scraped web footprints, CRM exports, legacy spreadsheets) into verified, deduped, and ICP-scored prospect intelligence.
+
+```mermaid
+flowchart TD
+    subgraph INGESTION ["A. Data Ingestion & Profiling Layer"]
+        RAW["Raw Records (CSV, XLSX, SQLite)"] --> PROFILER["Data Profiler & Type Inferrer"]
+        PROFILER --> HYGIENE["Hygiene & Null Matrix Filter"]
+    end
+
+    subgraph RESOLUTION ["B. Entity Resolution & Deduplication Graph"]
+        HYGIENE --> CANONICAL["Schema Harmonizer (Synonyms & Roots)"]
+        CANONICAL --> COMPOSITE["Multi-Pass Matching Engine"]
+        COMPOSITE -->|"Pass 1"| EXACT["Deterministic Exact Key Hash"]
+        COMPOSITE -->|"Pass 2"| FUZZY["Probabilistic RapidFuzz Token Match"]
+        EXACT --> CLUSTER["Cluster Partitioning (Union-Find)"]
+        FUZZY --> CLUSTER
+        CLUSTER --> CONFLICT["Conflict Detector & Complementary Merger"]
+    end
+
+    subgraph INTELLIGENCE ["C. Lead Intelligence & ICP Scoring"]
+        CONFLICT --> DAKINI_SCORE["Dakini 100-Point ICP Engine"]
+        DAKINI_SCORE --> TIERING["Tier Classifier (90+ / 45-89 / <45)"]
+        DAKINI_SCORE --> EVIDENCE["Workflow Signal & Evidence Parser"]
+    end
+
+    subgraph LINEAGE ["D. Provenance & Metrics Engine"]
+        TIERING --> PROVENANCE["Cell-Level Lineage & Shadow Store"]
+        EVIDENCE --> PROVENANCE
+        PROVENANCE --> KPI["Operational Analytics & KPI Generator"]
+        KPI --> EXPORT["Master.xlsx (Cleaned_Master + Summary + Trace)"]
+    end
+```
+
+### 5.1 Data Profiling, Quality & Hygiene Pipeline
+
+The system enforces rigorous automated data profiling before any merge or deduplication step takes place:
+
+1. **Type Inference & Precision Preservation**:
+   - **Textual Identifiers & Leading Zeros**: Phone numbers (e.g. `022-12345678`, `+91-9876543210`), postal codes, and corporate identifiers are ingested strictly as strings (`dtype=str`) or preserved objects to prevent numeric truncation or scientific notation (`1.23E+09`).
+   - **Domain Canonicalization**: Company websites and domains are normalized by stripping protocols (`http://`, `https://`), prefixes (`www.`), trailing slashes, and URL query tracking parameters (`?utm_*`, `?ref=*`).
+   - **Date Standardization**: Dates in varied formats (`DD/MM/YYYY`, `MM-DD-YYYY`, `YYYY.MM.DD`) are parsed unambiguously and coerced into ISO-8601 strings (`YYYY-MM-DD`). Ambiguous date representations are preserved in their raw format to prevent silent transposition errors.
+
+2. **Null & Dirty-Value Classification Matrix**:
+   - Raw records frequently encode nulls as pseudo-strings. The engine maps all such entries against the canonical placeholder set `DEFAULT_BLANK_PLACEHOLDERS`:
+     $$\mathcal{P}_{\text{blank}} = \{\text{""}, \text{"nan"}, \text{"none"}, \text{"null"}, \text{"n/a"}, \text{"na"}, \text{"-"}, \text{"--"}, \text{"nil"}, \text{"undefined"}, \text{"?"}, \text{"n.a."}\}$$
+   - Any value $v \in \mathcal{P}_{\text{blank}}$ is normalized to `""` during comparison.
+   - **Zero-Blank Matching Guarantee**: Under no circumstances can two blank values match each other. Empty fields cannot create false-positive duplicate clusters.
+
+3. **Completeness Index & Cardinality Analysis**:
+   - For any record $R$ with $K$ non-provenance data attributes, the completeness score is computed as:
+     $$\text{Completeness}(R) = \frac{1}{K} \sum_{k=1}^K \mathbb{I}\left(v_k \notin \mathcal{P}_{\text{blank}} \land v_k \neq ""\right) \times 100\%$$
+   - **Low-Cardinality Protection**: When deduplicating by selected columns, fields with low entropy/cardinality (such as `City`, `Country`, or generic `Status`) are shielded. Clusters with size $> 5$ having low matching-to-differing field ratios are flagged for manual review rather than automatically coalesced.
+
+---
+
+### 5.2 Entity Resolution & Deduplication Mechanics
+
+Entity resolution operates via a multi-pass hybrid deterministic and probabilistic matching engine:
+
+```mermaid
+flowchart LR
+    IN[Normalized Records] --> PASS1{Pass 1: Exact Match?}
+    PASS1 -- Yes --> G1[Group Exact Duplicates]
+    PASS1 -- No --> PASS2{Pass 2: Selected Identifiers?}
+    PASS2 -- Yes --> G2[Group Core Key Duplicates]
+    PASS2 -- No --> PASS3{Pass 3: Probabilistic Similarity?}
+    PASS3 -- Score >= 85% --> G3[Group Probable Duplicates]
+    PASS3 -- Score < 85% --> UNIQUE[Unique Master Record]
+
+    G1 --> RESOLVE[Complementary Resolver]
+    G2 --> RESOLVE
+    G3 --> RESOLVE
+    RESOLVE --> OUTPUT[Consolidated Output]
+```
+
+1. **Multi-Pass Comparison Hierarchy**:
+   - **Pass 1 (Deterministic Tuple Hashing)**: Generates a normalized hash tuple across all evaluated fields:
+     $$H(R) = \text{MD5}\left(\bigoplus_{c \in \text{compare\_cols}} \text{norm}(R[c])\right)$$
+     Exact identical tuples are immediately partitioned into an exact duplicate cluster.
+   - **Pass 2 (Semantic Root Field Alignment)**: Maps domain-specific variations (e.g. `Public phone number(s)` vs `Phone`, `Company website` vs `Website`) through `ROOT_SYNONYM_MAP` before running composite key checks on core business identity fields.
+   - **Pass 3 (Probabilistic Token Similarity)**: For records without exact matches, token-based similarity is evaluated using the RapidFuzz token sorting algorithm:
+     $$S(A, B) = \max\left(\text{TokenSetRatio}(A, B), \text{TokenSortRatio}(A', B')\right)$$
+     where $A', B'$ are punctuation-stripped alphanumeric token sets. Pairs with $S(A, B) \ge 85\%$ (configurable threshold) are routed to probable duplicate clusters.
+
+2. **Cluster Partitioning & Disjoint Set Union (Union-Find)**:
+   - Matches are assembled into connected components using a Disjoint Set Union (DSU) graph.
+   - Pairwise comparisons are bounded with a candidate index cap ($N \le 2500$) to guarantee responsive execution and prevent quadratic $\mathcal{O}(N^2)$ freezing on large datasets.
+
+3. **Conflict Detection & Complementary Merging**:
+   - **Complementary Merge Rule**: When merging rows $R_1, R_2, \dots, R_m$ into a master record $R^*$:
+     $$R^*[c] = \begin{cases} R_{\text{preferred}}[c] & \text{if } R_{\text{preferred}}[c] \notin \mathcal{P}_{\text{blank}} \\ R_k[c] & \text{where } k = \min \{i : R_i[c] \notin \mathcal{P}_{\text{blank}}\} \\ "" & \text{if all } R_i[c] \in \mathcal{P}_{\text{blank}} \end{cases}$$
+   - **Conflict Handling**: If two records hold differing, non-blank values (e.g. different phone numbers or conflicting executive names), the discrepancy is recorded in `DuplicateGroup.conflicts` and routed to the `Review_Required` sheet if manual intervention is warranted.
+
+---
+
+### 5.3 Dakini ICP 100-Point Scoring Matrix & Signal Intelligence
+
+The integrated Dakini AI Scraper scores every discovered prospect against an Ideal Customer Profile (ICP) framework totaling **100 points across 7 weighted dimensions**:
+
+| Scoring Dimension | Max Points | Evaluation Criteria & Evidence Sources | Algorithmic Implementation |
+| :--- | :---: | :--- | :--- |
+| **1. Core Service Fit** | **30** | Primary business model alignment (Digital Marketing, SEO, SEM, Performance Marketing, Social Media). | Multi-token regex scanning over meta descriptions, services pages, and Clutch tags. |
+| **2. Operating Scale & Revenue** | **25** | Company headcount ($10-50$, $50-200$, $200+$), estimated billings, and client portfolio breadth. | Tiered scoring: 50–200 employees = 25 pts; 10–50 employees = 18 pts; <10 employees = 10 pts. |
+| **3. Indian Delivery Footprint** | **5** | Physical office or delivery operations in Indian tech hubs (Bengaluru, Mumbai, Delhi-NCR, Pune, Hyderabad, Chennai). | Geographic entity extraction matching Indian city and state dictionaries. |
+| **4. Tech Stack & Integration** | **8** | Adoption of marketing automation, CRM, and analytics platforms (HubSpot, Salesforce, Google Ads, Meta Pixel). | Scraped HTML footprint inspection and DNS/HTTP header technology fingerprinting. |
+| **5. Buying Signals & Growth Intent** | **15** | Active hiring for growth/sales roles, recent expansion announcements, Series funding, new client wins. | NLP sentiment and keyword extraction on career pages and news feeds. |
+| **6. Direct Contactability** | **5** | Verified business telephone (E.164 compliant) and authenticated corporate email address (non-free domain). | Syntax validation, MX-record verification, and exclusion of generic `@gmail`/`@yahoo` domains. |
+| **7. Workflow Evidence Depth** | **12** | Multi-source verification depth (cross-referenced across website, Clutch, LinkedIn, corporate registries). | Corroboration ratio: 3+ sources = 12 pts; 2 sources = 8 pts; 1 source = 4 pts. |
+
+#### ICP Tier Classification Thresholds:
+
+$$\text{Tier}(S) = \begin{cases} 
+\text{"Tier 1: High Potential"} & \text{if } S \ge 90 \\ 
+\text{"Tier 2: Research Required"} & \text{if } 45 \le S < 90 \\ 
+\text{"Tier 3: Lower Fit"} & \text{if } S < 45 
+\end{cases}$$
+
+- **High Potential ($\ge 90$)**: Automated fast-track into `Master.xlsx` with highest lead priority; complete contact intelligence and proven buying signals.
+- **Research Required ($45 - 89$)**: Qualified agency fit but missing secondary contacts or verification depth; ingested with research flags for follow-up enrichment.
+- **Lower Fit ($< 45$)**: Below qualification bar; filtered out by default or stored for passive tracking.
+
+---
+
+### 5.4 Full-Lineage Provenance & Audit Trail Architecture
+
+The platform guarantees enterprise-grade data governance through cell-level and row-level lineage tracking:
+
+1. **Immutable Shadow Columns**:
+   Every record entering the pipeline is augmented with 5 non-destructive metadata columns that persist through all transformations:
+   - `_source_file`: Original filename (e.g. `indian-digital-marketing-agencies-enriched.csv` or `dakini-state.sqlite`).
+   - `_source_sheet`: Original worksheet name or SQLite collection name (`companies`, `prospects`).
+   - `_source_row`: Exact physical row number in the originating document (enables instantaneous source verification).
+   - `_import_id`: Unique UUIDv4 assigned to each discrete ingestion run.
+   - `_is_master`: Boolean indicator designating whether the row originated from the established master or a newly ingested feed.
+
+2. **Audit Logging & Delta Reconciliation**:
+   - When a complementary merge occurs, the specific fields enriched and their source records are recorded in the audit trace.
+   - **Custom Column Invariance**: Any custom user columns existing in `Master.xlsx` (e.g. `Sales_Rep_Assigned`, `Outreach_Status`, `Deal_Size`) are automatically preserved during merges, preventing downstream data erasure.
+
+---
+
+### 5.5 Multi-Dimensional Operational Analytics & Funnel Metrics
+
+The system continuously aggregates processing metrics to deliver real-time transparency across ingestion runs:
+
+```
+[Raw Ingested Records] ──► [Schema Normalized] ──► [Duplicate Detection] ──► [Complementary Merge] ──► [Clean Master Records]
+       1,250                      1,250                 142 Duplicates            98 Enriched               1,108 Unique
+```
+
+#### Key Performance Indicators (KPIs) Displayed in `Processing_Summary`:
+
+| Metric Name | Formula / Definition | Operational Purpose |
+| :--- | :--- | :--- |
+| **Gross Ingested Rows** | $\sum |R_{\text{source}}| $ | Quantifies total raw record volume across all files and crawler tables. |
+| **Net Consolidated Master** | $|R^*|$ | Total count of unique, verified records written to `Cleaned_Master`. |
+| **Duplicate Drop Rate** | $\frac{|R_{\text{duplicates}}|}{|R_{\text{gross}}|} \times 100\%$ | Measures source overlap and redundant prospect volume across datasets. |
+| **Complementary Enrichment Yield** | $\sum \mathbb{I}(\text{Blank Cell} \leftarrow \text{Enriched Value})$ | Counts the number of formerly missing data points populated via merge. |
+| **Fill-Rate Completeness Delta** | $\text{Completeness}_{\text{post-merge}} - \text{Completeness}_{\text{pre-merge}}$ | Measures the net informational gain achieved by the consolidation pass. |
+| **Cross-System Match Rate** | $\frac{|R_{\text{spreadsheet}} \cap R_{\text{dakini}}|}{|R_{\text{spreadsheet}}|} \times 100\%$ | Measures overlap between offline spreadsheets and live Dakini crawler discoveries. |
+
+---
+
+## 6. Directory Structure & File Layout
 
 ```
 d:/Master Database/
@@ -298,7 +423,7 @@ d:/Master Database/
 
 ---
 
-## 6. Verification & Test Coverage Summary
+## 7. Verification & Test Coverage Summary
 
 | Test Suite | Module | Test Scope | Status |
 | :--- | :--- | :--- | :---: |

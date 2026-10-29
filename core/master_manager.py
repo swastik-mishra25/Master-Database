@@ -77,6 +77,7 @@ class MasterManager:
         if not self.exists():
             return None
 
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         backup_filename = f"{prefix}_{timestamp}.xlsx"
         backup_path = self.backup_dir / backup_filename
@@ -115,6 +116,7 @@ class MasterManager:
             except Exception as be:
                 return False, f"Failed to create safety backup prior to update: {str(be)}", None
 
+        self.master_path.parent.mkdir(parents=True, exist_ok=True)
         # Temporary file in the same directory for true atomic replacement
         temp_file = self.master_path.parent / f"temp_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.xlsx"
 
