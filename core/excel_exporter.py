@@ -50,34 +50,57 @@ def write_master_excel_workbook(
     # Remove default sheet
     wb.remove(wb.active)
 
-    # 1. Cleaned_Master
-    # Exclude internal provenance columns from Cleaned_Master display
+    # Extract dataframes from direct arguments or extra_sheets
+    if extra_sheets:
+        if duplicate_report_df is None and "Duplicate_Report" in extra_sheets:
+            duplicate_report_df = extra_sheets.get("Duplicate_Report")
+        if processing_summary_df is None and "Processing_Summary" in extra_sheets:
+            processing_summary_df = extra_sheets.get("Processing_Summary")
+        if review_required_df is None and "Review_Required" in extra_sheets:
+            review_required_df = extra_sheets.get("Review_Required")
+        if source_trace_df is None and "Source_Trace" in extra_sheets:
+            source_trace_df = extra_sheets.get("Source_Trace")
+
+    # 1. Cleaned_Master (Always present)
     display_master_cols = [c for c in cleaned_master_df.columns if c not in PROVENANCE_COLS]
     master_export_df = cleaned_master_df[display_master_cols] if not cleaned_master_df.empty else pd.DataFrame(columns=display_master_cols)
     _add_formatted_sheet(wb, "Cleaned_Master", master_export_df, header_color="1F4E79")
 
-    # 2. Duplicate_Report
-    dup_df = duplicate_report_df if duplicate_report_df is not None else pd.DataFrame(
-        columns=["Group_ID", "Match_Type", "Confidence", "Action_Taken", "Matching_Fields", "Differences", "Explanation"]
-    )
-    _add_formatted_sheet(wb, "Duplicate_Report", dup_df, header_color="2F5597", empty_message="No duplicates identified.")
+    # 2. Duplicate_Report (Only include if there are actual duplicate records to report)
+    if duplicate_report_df is not None and not duplicate_report_df.empty:
+        _add_formatted_sheet(wb, "Duplicate_Report", duplicate_report_df, header_color="2F5597")
 
-    # 3. Processing_Summary
-    summary_df = processing_summary_df if processing_summary_df is not None else pd.DataFrame(
-        columns=["Metric", "Value", "Details"]
-    )
-    _add_formatted_sheet(wb, "Processing_Summary", summary_df, header_color="1E385B")
+    # 3. Processing_Summary (Always include with meaningful operational metrics)
+    if processing_summary_df is not None and not processing_summary_df.empty:
+        _add_formatted_sheet(wb, "Processing_Summary", processing_summary_df, header_color="1E385B")
+    else:
+        # Generate default operational summary so this tab is never empty
+        prov_cols = [c for c in PROVENANCE_COLS if c in cleaned_master_df.columns]
+        sources_list = []
+        if "_source_file" in cleaned_master_df.columns:
+            sources_list = list(cleaned_master_df["_source_file"].dropna().unique())
+        
+        summary_rows = [
+            ("Last Updated", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+            ("Consolidated Master Records", len(master_export_df)),
+            ("Active Data Columns", len(display_master_cols)),
+            ("Contributing Sources Count", len(sources_list) if sources_list else 1),
+            ("Contributing Sources", ", ".join(str(s) for s in sources_list[:5]) if sources_list else "Master.xlsx"),
+            ("Duplicate Status", f"{len(duplicate_report_df)} groups" if duplicate_report_df is not None and not duplicate_report_df.empty else "Zero duplicates detected (100% unique records)"),
+        ]
+        fallback_summary = pd.DataFrame(summary_rows, columns=["Metric", "Value"])
+        _add_formatted_sheet(wb, "Processing_Summary", fallback_summary, header_color="1E385B")
 
-    # 4. Review_Required
-    review_cols = [c for c in review_required_df.columns if c not in PROVENANCE_COLS] if review_required_df is not None and not review_required_df.empty else ["Status", "Record_Reference", "Notes"]
-    review_export_df = review_required_df[review_cols] if review_required_df is not None and not review_required_df.empty else pd.DataFrame(columns=review_cols)
-    _add_formatted_sheet(wb, "Review_Required", review_export_df, header_color="C00000", empty_message="No records requiring review.")
+    # 4. Review_Required (Only include if manual review records exist)
+    if review_required_df is not None and not review_required_df.empty:
+        review_cols = [c for c in review_required_df.columns if c not in PROVENANCE_COLS]
+        review_export_df = review_required_df[review_cols] if review_cols else review_required_df
+        _add_formatted_sheet(wb, "Review_Required", review_export_df, header_color="C00000")
 
-    # 5. Source_Trace
+    # 5. Source_Trace (Row-level data provenance)
     if source_trace_df is not None and not source_trace_df.empty:
         trace_df = source_trace_df
     else:
-        # Generate source trace from provenance columns if present in cleaned_master_df
         prov_present = [c for c in PROVENANCE_COLS if c in cleaned_master_df.columns]
         if prov_present and not cleaned_master_df.empty:
             trace_cols = ["Master_Row"] + prov_present
@@ -85,14 +108,17 @@ def write_master_excel_workbook(
             t_df.insert(0, "Master_Row", [i + 1 for i in range(len(t_df))])
             trace_df = t_df
         else:
-            trace_df = pd.DataFrame(columns=["Master_Row", "Source_File", "Source_Sheet", "Source_Row"])
-    _add_formatted_sheet(wb, "Source_Trace", trace_df, header_color="595959", empty_message="No source trace records.")
+            trace_df = pd.DataFrame()
 
-    # Extra custom sheets if provided
+    if not trace_df.empty:
+        _add_formatted_sheet(wb, "Source_Trace", trace_df, header_color="595959")
+
+    # 6. Any other extra custom sheets (if provided and non-empty)
     if extra_sheets:
         for name, sheet_df in extra_sheets.items():
-            if name not in wb.sheetnames:
-                _add_formatted_sheet(wb, name, sheet_df, header_color="333333")
+            if name not in ["Duplicate_Report", "Processing_Summary", "Review_Required", "Source_Trace"] and name not in wb.sheetnames:
+                if isinstance(sheet_df, pd.DataFrame) and not sheet_df.empty:
+                    _add_formatted_sheet(wb, name, sheet_df, header_color="333333")
 
     wb.save(filepath)
     wb.close()

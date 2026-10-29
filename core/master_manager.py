@@ -146,6 +146,12 @@ class MasterManager:
             # Atomic replace (same directory)
             os.replace(str(temp_file), str(self.master_path))
             return True, "Master workbook saved successfully.", backup_path
+        except (PermissionError, OSError) as e:
+            if temp_file.exists():
+                temp_file.unlink(missing_ok=True)
+            if "Access is denied" in str(e) or isinstance(e, PermissionError):
+                return False, "Master.xlsx is currently open in Microsoft Excel or another program. Please close Master.xlsx in Excel and run again.", backup_path
+            return False, f"Failed to save Master workbook: {str(e)}", backup_path
         except Exception as e:
             if temp_file.exists():
                 temp_file.unlink(missing_ok=True)

@@ -5,6 +5,11 @@ and automatically streams them into data/Master.xlsx in real-time.
 """
 import argparse
 import sys
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 import time
 from datetime import datetime
 

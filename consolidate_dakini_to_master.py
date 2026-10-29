@@ -1,6 +1,13 @@
 """
 One-click CLI script to consolidate Dakini AI ICP Scraper prospects directly into data/Master.xlsx.
 """
+import sys
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from pathlib import Path
 import pandas as pd
 
@@ -64,6 +71,11 @@ def consolidate_dakini():
     extra_sheets = {}
     try:
         extra_sheets["Processing_Summary"] = workflow.get_summary_dataframe()
+        dup_df = workflow.get_duplicate_report_dataframe()
+        if not dup_df.empty:
+            extra_sheets["Duplicate_Report"] = dup_df
+        if not workflow.review_df.empty:
+            extra_sheets["Review_Required"] = workflow.review_df
     except Exception:
         pass
 

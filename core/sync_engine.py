@@ -176,6 +176,11 @@ class DakiniSyncEngine:
             extra_sheets = {}
             try:
                 extra_sheets["Processing_Summary"] = wf.get_summary_dataframe()
+                dup_df = wf.get_duplicate_report_dataframe()
+                if not dup_df.empty:
+                    extra_sheets["Duplicate_Report"] = dup_df
+                if not wf.review_df.empty:
+                    extra_sheets["Review_Required"] = wf.review_df
             except Exception:
                 pass
 

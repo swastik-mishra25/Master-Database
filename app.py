@@ -30,6 +30,7 @@ from core.normalizer import PROVENANCE_COLS, is_blank
 from core.workflow import ConsolidationWorkflow
 from core.connectors import DakiniConnector, load_dakini_dataset, inspect_dakini_sqlite
 from core.sync_engine import DakiniSyncEngine
+from core.scraper_manager import scraper_manager
 
 # Page Configuration
 st.set_page_config(
@@ -257,7 +258,42 @@ with tab_files:
     )
 
 with tab_dakini:
-    st.markdown("Connect to your local **Dakini AI ICP Scraper** project to import discovered prospects, fit scores, and verified contact data.")
+    st.markdown("Connect and coordinate with your local **Dakini AI ICP Scraper** project to import discovered prospects and sync verified contact data.")
+    
+    # Unified Scraper Process Coordination Bar
+    sc_status = scraper_manager.get_status()
+    col_proc1, col_proc2, col_proc3 = st.columns([2, 1, 1])
+    with col_proc1:
+        if sc_status["running"]:
+            st.markdown(f'<span class="status-badge-active">● Dakini Scraper Online (PID: {sc_status["pid"]})</span> &nbsp; <a href="http://localhost:3000" target="_blank">Open Scraper Web UI ↗</a>', unsafe_allow_html=True)
+        else:
+            st.markdown('<span class="status-badge-inactive">○ Dakini Scraper Offline</span> &nbsp; <span style="font-size:0.85rem;color:#64748B;">(Click Launch to start on port 3000)</span>', unsafe_allow_html=True)
+    with col_proc2:
+        if not sc_status["running"]:
+            if st.button("▶️ Launch Scraper", type="primary", use_container_width=True):
+                ok, msg = scraper_manager.start(live_mode=True)
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+                st.rerun()
+        else:
+            if st.button("⏹️ Stop Scraper", type="secondary", use_container_width=True):
+                ok, msg = scraper_manager.stop()
+                if ok:
+                    st.warning(msg)
+                else:
+                    st.error(msg)
+                st.rerun()
+    with col_proc3:
+        if sc_status["running"]:
+            if st.button("🔄 Restart Scraper", use_container_width=True):
+                scraper_manager.stop()
+                time.sleep(1)
+                scraper_manager.start(live_mode=True)
+                st.rerun()
+
+    st.markdown("---")
     
     local_candidates = DakiniConnector.find_local_dakini_files()
     if local_candidates:
